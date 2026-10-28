@@ -1,38 +1,38 @@
-# Bastion
+# Bastion för Apple
 
-Bastion är ett multiplattformsprojekt med en delad Swift-baserad SSH-kärna och separata applikationsytor för Apple-plattformar, Android, Linux och Windows.
+**Dokumentation:** [pissmyran.github.io/bastion_apple](https://pissmyran.github.io/bastion_apple/)
 
-## Struktur
+Bastion är en SSH-klient. Det här repot innehåller versionen för iOS, iPadOS, macOS och tvOS, byggd med Swift, SwiftNIO SSH, SwiftUI och XcodeGen. Övriga plattformar har egna repon: [Bastion för Linux](https://github.com/pissmyran/bastion_linux), [Bastion för Windows](https://github.com/pissmyran/bastion_windows), [Bastion för Android](https://github.com/pissmyran/bastion_android).
 
-| Område | Plats | Teknik |
-| --- | --- | --- |
-| delad SSH-kärna + CLI | `Sources/`, `Tests/`, `Package.swift` | Swift / SwiftNIO |
-| iOS, macOS, tvOS | `App/` | Swift / XcodeGen |
-| Android | `Android/` | Kotlin / Gradle |
-| Linux | `LinuxApp/` | Rust |
-| Windows | `WindowsApp/` | .NET |
+## Innehåll
 
-## Snabb verifiering
+| Plats | Innehåll |
+| --- | --- |
+| `Sources/SSHCore/` | Delad SSH-kärna: sessioner, SFTP, vidarebefordran, synk och kryptering |
+| `Sources/bastion-cli/` | Kommandoradsverktyg ovanpå SSHCore |
+| `Tests/` | Tester för SSHCore och de gemensamma fixturerna för synkformatet |
+| `App/` | iOS-, iPadOS- och macOS-appen, XcodeGen-spec och fastlane |
+| `App/TVApp/` | tvOS-appen |
+| `Package.swift` | Swift-paketet med SSHCore och bastion-cli |
 
-Swift-kärnan:
+## Kom igång
+
+Bygg och testa Swift-paketet (fungerar på Linux och macOS):
 
 ```bash
-swift test
+swift build && swift test
 ```
 
-Övriga plattformar har egna bygg- och verifieringsflöden; se **[dokumentationsöversikten](docs/index.md)**.
+Generera Xcode-projektet (bara på macOS):
 
-## Dokumentation
+```bash
+sh App/generate-project.sh
+```
 
-Den publicerade dokumentationssajten är `https://docs.bastion.denied.se`. Källan är alltid repositoryts versionsstyrda `docs/`, och stable dokumentation byggs från samma Git-tagg som Bastions GitHub Release.
+Apparna byggs med Xcode på macOS. Targets: `Bastion` (iOS och iPadOS), `Bastion-macOS` och `Bastion-tvOS`. Kör alltid `App/generate-project.sh`, aldrig `xcodegen` direkt: skriptet läser beroendeversionerna i `App/Package.swift` och skickar dem vidare.
 
-- [Dokumentationsöversikt](docs/index.md)
-- [Projektkontext](docs/project-context.md) — plattformar och bygginvarianter
-- [Arkitektur](docs/architecture.md) — komponentgränser och delad kärna
-- [Drift och verifiering](docs/operations.md) — plattformsspecifika kontroller
-- [Release- och versionsstandard](docs/release-standard.md) — SemVer, PR-titlar och releasegränser
-- [SECURITY.md](SECURITY.md) — säkerhetsrapportering
+## Mer
 
-## Viktig Apple-invariant
-
-`App/Package.swift` är manifestet som dependency automation kan läsa. `App/generate-project.sh` läser dependencyversioner därifrån och matar dem vidare till XcodeGen. Generera därför inte Bastions Apple-projekt med en direkt `xcodegen generate --spec App/project.yml` om det kringgår wrappern.
+- [Dokumentationen](https://pissmyran.github.io/bastion_apple/) – kom igång, arkitektur, drift, synkformat och release
+- [SECURITY.md](SECURITY.md) – rapportera en sårbarhet
+- [CONTRIBUTING.md](CONTRIBUTING.md) – bidra

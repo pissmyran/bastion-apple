@@ -1,25 +1,19 @@
-# Issue tracker: GitHub
+# Issues
 
-GitHub Issues is the canonical issue and specification tracker for this repository.
+GitHub Issues i `pissmyran/bastion_apple` är repots ärendehantering.
 
-## Working convention
+## Arbetssätt
 
-- Prefer the authenticated GitHub connector; otherwise use `gh` from an authenticated clone.
-- Read the full issue state before acting: body, labels, comments, assignees, linked pull requests, sub-issues, and native dependencies where available.
-- Keep one coherent problem or deliverable per issue, with acceptance criteria and blockers in the issue body.
-- Pull requests are implementation/review artifacts, not a replacement issue tracker.
-- Durable architecture or domain decisions belong in version-controlled repository documentation rather than only in issue comments.
+- Läs hela ärendet före arbete: text, etiketter, kommentarer och kopplade pull requests.
+- Ett ärende ska beskriva ett sammanhållet problem, med acceptanskriterier och hinder i texten.
+- Beslut som ska bestå skrivs in i dokumentationen, inte bara i en kommentar.
 
-## CLI fallback
+## Från en molnsession
 
-For a quick issue view:
+`gh issue` fungerar inte i molnsessioner (GraphQL är avstängt). Använd REST:
 
-```bash
-gh issue view <number> --json number,title,body,state,labels,assignees,comments,closedByPullRequestsReferences
-```
-
-The CLI field above can omit closed linked pull requests. When complete linked-PR history matters, use the authenticated GitHub connector or GraphQL API with `closedByPullRequestsReferences(includeClosedPrs: true)` before acting.
-
-Use `gh issue list`, `gh issue create`, `gh issue comment`, and `gh issue close` for the corresponding operations. Inspect native dependency/sub-issue state through the GitHub connector or API when it affects execution order.
-
-When a skill says to publish or fetch a ticket, use this repository's GitHub Issues tracker.
+- Läs: `gh api repos/pissmyran/bastion_apple/issues/<n>` och `…/issues/<n>/comments`
+- Lista öppna: `gh api 'repos/pissmyran/bastion_apple/issues?state=open'`
+- Skapa: `gh api repos/pissmyran/bastion_apple/issues -f title='…' -f body='…'`
+- Kommentera: `gh api repos/pissmyran/bastion_apple/issues/<n>/comments -f body='…'`
+- Stäng: `gh api -X PATCH repos/pissmyran/bastion_apple/issues/<n> -f state=closed`

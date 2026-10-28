@@ -1,15 +1,14 @@
-# Domain documentation
+# Domändokumentation
 
-This repository uses a **single-context** domain-documentation convention.
+Repot använder en enda dokumentationskontext.
 
-## Read before domain-sensitive work
+## Läs före domänkänsligt arbete
 
-1. `docs/project-context.md` for current technical state.
-2. `docs/architecture.md` for component and trust-boundary decisions.
-3. `docs/operations.md` for verified operational constraints.
-4. Relevant ADRs under `docs/adr/`, when present.
-5. Root `CONTEXT.md`, when an explicit domain glossary/context has been introduced.
+1. `docs/arkitektur.md` för komponenter och säkerhetsgränser.
+2. `docs/drift.md` för verifiering och kända villkor.
+3. `docs/synkformat.md` när värdlistan eller synken berörs.
+4. ADR:er under `docs/adr/`, om sådana finns.
 
-Absence of `CONTEXT.md` or `docs/adr/` is not an error. Do not create placeholder files merely to satisfy the convention; create or update them when domain terminology or architectural decisions actually need durable representation.
+Saknas `docs/adr/` är det inget fel. Skapa inte tomma filer bara för att följa konventionen.
 
-Use established repository vocabulary consistently. If a proposal conflicts with an existing recorded decision, surface that conflict explicitly rather than silently overriding it.
+Använd repots befintliga ord. Krockar ett förslag med ett dokumenterat beslut, säg det uttryckligen i stället för att skriva över beslutet i tysthet.

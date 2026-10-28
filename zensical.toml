@@ -1,27 +1,36 @@
 [project]
-site_name = "Bastion"
-site_url = "https://docs.bastion.denied.se"
-site_description = "Dokumentation för Bastion – multiplattforms SSH-klient från Avkroken."
-site_author = "Avkroken"
-repo_url = "https://github.com/Avkroken/Bastion"
+site_name = "Bastion för Apple"
+site_url = "https://pissmyran.github.io/bastion_apple/"
+site_description = "SSH-klienten för iPhone, iPad, Mac och Apple TV, byggd på den delade Swift-kärnan SSHCore."
+repo_url = "https://github.com/pissmyran/bastion_apple"
+repo_name = "pissmyran/bastion_apple"
 edit_uri = "edit/main/docs/"
 docs_dir = "docs"
 site_dir = "site"
-copyright = "Avkroken"
+copyright = "Bastion – Apache-2.0"
 nav = [
-  { "Översikt" = "index.md" },
-  { "Projektkontext" = "project-context.md" },
-  { "Arkitektur" = "architecture.md" },
-  { "Drift och verifiering" = "operations.md" },
-  { "Release och versionering" = "release-standard.md" },
+  { "Start" = "index.md" },
+  { "Kom igång" = "kom-igang.md" },
+  { "Arkitektur" = "arkitektur.md" },
+  { "Drift och verifiering" = "drift.md" },
+  { "Synkformat" = "synkformat.md" },
+  { "Release" = "release.md" },
+  { "GUI-prototyp" = "prototyp/bastion-gui.html" },
 ]
 extra_css = [
   "stylesheets/extra.css",
 ]
 
+[project.extra]
+platform = "iOS, iPadOS, macOS och tvOS"
+tagline = "SSH-klienten för iPhone, iPad, Mac och Apple TV, byggd på den delade Swift-kärnan SSHCore."
+
 [project.theme]
 variant = "modern"
 language = "sv"
+custom_dir = "overrides"
+logo = "assets/bastion.svg"
+favicon = "assets/bastion.svg"
 features = [
   "navigation.instant",
   "navigation.instant.prefetch",
@@ -32,6 +41,7 @@ features = [
   "navigation.sections",
   "navigation.path",
   "navigation.top",
+  "navigation.footer",
   "toc.follow",
   "search.highlight",
   "content.action.edit",

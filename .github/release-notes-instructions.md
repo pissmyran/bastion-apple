@@ -1,4 +1,4 @@
-# Avkroken Copilot release-note instructions
+# Release-note instructions
 
 ## Entry guidance
 - Write one concise description per qualifying pull request; do not combine separate PRs.
