@@ -1,0 +1,25 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+enhancement:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "CODEOWNERS"
+          - "src/**"
+          - "app/**"
+          - "lib/**"
+          - "test/**"
+          - "tests/**"
+          - "**/package.json"
+          - "**/package-lock.json"
+          - "**/pyproject.toml"
+          - "**/requirements*.txt"
+          - "**/Dockerfile"
+          - "**/Package.swift"
+          - "**/*.csproj"
+          - "**/*.gradle"
+          - "**/*.gradle.kts"

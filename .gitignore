@@ -1,0 +1,18 @@
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+Package.resolved
+.env
+.sentryclirc
+
+# fastlane (App/) — transienta körningsartefakter, inte konfiguration.
+# Gemfile.lock committas medvetet (reproducerbar CI-körning).
+App/fastlane/report.xml
+App/fastlane/Preview.html
+App/fastlane/screenshots/
+App/fastlane/test_output/
+App/vendor/
+
+# Zensical generated site
+site/

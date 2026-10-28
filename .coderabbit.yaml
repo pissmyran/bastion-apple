@@ -1,0 +1,164 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+inheritance: true
+
+reviews:
+  path_instructions:
+    # SSH-tillit och autentisering.
+    - path: "{Sources/SSHCore/{HostKeyValidator,KnownHosts,SSHUserAuth,SSHSession}.swift,LinuxApp/src/{known_hosts,ssh}.rs,WindowsApp/Bastion.Core/{KnownHosts,SshSession,HostAuth}.cs,Android/app/src/main/kotlin/se/denied/bastion/ssh/BastionSshSession.kt}"
+      instructions: |
+        När värdnyckelkontroll eller autentisering ändras, kontrollera
+        att TOFU fortfarande skiljer första anslutningen från en ändrad
+        nyckel för samma värd och port. En ändrad nyckel ska avvisas.
+        Kontrollera även separata kommandon, SFTP och varje ProxyJump-led
+        där dessa anslutningsvägar finns.
+        På Android ska läs-, tolknings- och skrivfel i known_hosts
+        avvisa anslutningen, inte aktivera AcceptAllServerKeyVerifier.
+        Vid ändrad agentvidarebefordran, kontrollera att användarens
+        uttryckliga forwardAgent-val fortfarande styr åtkomsten.
+
+    # Samtidighet och anslutningars livstid.
+    - path: "{Sources/SSHCore/{SSHSession,SSHShell,SFTPClient}.swift,App/{ChainConnector,TerminalView}.swift,App/TVApp/ChainConnector.swift,LinuxApp/src/ssh.rs,WindowsApp/Bastion.Core/SshSession.cs,Android/app/src/main/kotlin/se/denied/bastion/ssh/BastionSshSession.kt}"
+      instructions: |
+        När anslutning, keepalive eller stängning ändras, följ samtidiga
+        connect-, kanalöppnings- och close-förlopp samt autentiseringsfel.
+        Kontrollera att promises och continuations fullbordas högst
+        en gång och att fel eller stängning inte lämnar anrop väntande.
+        Kontrollera att sent färdiga anslutningar och kanaler stängs
+        om anroparen redan har avbrutit.
+        En gammal keepalive-monitor får inte stänga en ny session.
+        Använd TerminalTeardownRaceTests, AuthFailureTerminationTests
+        och respektive plattforms sessionstester som regressionsunderlag.
+
+    # Beständigt format och sammanslagning.
+    - path: "{Sources/SSHCore/{Host,HostStore,Snippet,SnippetStore,SyncEngine}.swift,LinuxApp/src/{host,snippet,sync,fsutil}.rs,WindowsApp/Bastion.Core/{Host,HostAuth,HostStore,Snippet,SyncState,SyncEngine,ReferenceDate,FsUtil}.cs,Tests/fixtures/{host-wire-format,sync-state-wire-format}.json}"
+      instructions: |
+        När serialisering eller lagring ändras, jämför fältnamn,
+        UUID-kodning, datumepoken 2001-01-01 och tombstones-formatet
+        med befintliga läsare och wire-format-fixturer.
+        Kontrollera läsning av äldre Host-listor och, där snippets
+        ingår, tillstånd utan snippets-fältet.
+        Kontrollera att merge är idempotent och ordningsoberoende,
+        även vid lika modifiedAt. En minst lika ny tombstone ska
+        vinna över posten. Gemensamma tombstones får inte tappas
+        när hosts och snippets lagras i separata filer.
+        Kontrollera att ändrade skrivvägar bevarar komplett tidigare
+        data vid fel och inte förlorar samtidiga lokala ändringar.
+        Anta inte identiskt funktionsstöd i Windows, Swift och Rust.
+        Ändra inte fixturer enbart för att dölja ett formatbrott.
+
+    # Krypterat synkformat.
+    - path: "{Sources/SSHCore/SyncCrypto.swift,LinuxApp/src/sync_crypto.rs,WindowsApp/Bastion.Core/SyncCrypto.cs}"
+      instructions: |
+        När kuvertet eller kryptografin ändras, kontrollera BSYNC1,
+        iterationsfältets big-endian-kodning, salt och ordningen
+        nonce, ciphertext, tag mot de andra implementationerna.
+        Kontrollera PBKDF2-HMAC-SHA256, AES-256-GCM, färskt salt
+        och färsk nonce samt avvisning av manipulerade kuvert.
+        Indatans iterationsantal ska begränsas före nyckelhärledning.
+        Kontrollera kompatibilitet med befintliga krypterade filer
+        och kända testvektorer. Fel lösenfras eller skadad data får
+        inte tolkas som ett tomt tillstånd som sedan skrivs tillbaka.
+
+    # OAuth och molnsynk.
+    - path: "{App/{OAuthAccountManager,OAuthTokenStore,OAuthProviders,DropboxSyncProvider,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,App/TVApp/{TVDeviceFlowOAuthManager,TVOAuthTokenStore,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,LinuxApp/src/{oauth,sync_webdav}.rs}"
+      instructions: |
+        När OAuth-flödet ändras, kontrollera kopplingen mellan PKCE,
+        state, callback och den redirect_uri som används i kodbytet.
+        Vid tokenförnyelse, kontrollera samtidiga anrop för samma
+        provider och att en roterad refresh-token sparas utan att
+        en annan förnyelse skriver tillbaka ett äldre värde.
+        Om svaret saknar refresh-token ska föregående värde bevaras.
+        I tvOS device flow ska avbrott och utgångstid stoppa pollning
+        och tokenlagring. Respektera interval och slow_down.
+        När synktransport ändras, skilj saknad fil från nekad åtkomst,
+        nätverksfel och skadad nyttolast innan någon push utförs.
+        Bevara SyncCrypto-krypteringen i Apples molnleverantörer.
+        Anta inte att Linux WebDAV använder samma krypterade format.
+        WebDAV-credentials får endast skickas över HTTPS eller
+        till den uttryckligen tillåtna loopback-adressen.
+        Kontrollera att feltexter inte exponerar tokens eller råa
+        svarskroppar som kan innehålla credentials.
+
+    # SFTP-protokoll och filhandtag.
+    - path: "Sources/SSHCore/SFTP{Client,Protocol}.swift"
+      instructions: |
+        När SFTP-avkodning ändras, kontrollera fragmenterade paket,
+        obetrodda längdfält och antal poster före allokering.
+        När request-hanteringen ändras, kontrollera att varje svar
+        matchar rätt request-id även vid samtidiga operationer.
+        Protokollfel och stängd kanal ska avsluta väntande anrop.
+        Kontrollera att öppnade fil- och kataloghandtag stängs
+        även när läsning, skrivning eller avkodning misslyckas.
+
+    # TCP- och SOCKS-vidarebefordran.
+    - path: "{Sources/SSHCore/{PortForward,SOCKSProxy}.swift,LinuxApp/src/{port_forward,socks_proxy}.rs}"
+      instructions: |
+        När bindning ändras, kontrollera att lokala och dynamiska
+        forwards inte oavsiktligt exponeras utanför loopback.
+        Skilj lokal bindning från fjärrbindningens avsedda adress.
+        Vid fjärrport 0 ska tilldelad port användas för registrering
+        och avregistrering. Avvisa inkommande forwarded-tcpip
+        som inte motsvarar en aktiv vidarebefordran.
+        Kontrollera att lyssnare och aktiva bryggor stängs vid fel
+        eller avslut och att SOCKS-svar motsvarar anslutningsresultatet.
+
+    # Kommandobyggare för fjärrsystem.
+    - path: "{Sources/SSHCore/{ArchiveOperations,KeyManagement,DockerService,ProcessRunner}.swift,LinuxApp/src/{archive,key_deploy}.rs,LinuxApp/integrations/src/docker.rs,WindowsApp/Bastion.Core/{ArchiveOperations,DockerService}.cs}"
+      instructions: |
+        När filnamn, nycklar eller Docker-referenser når ett kommando,
+        kontrollera rätt citering för det faktiska skalet samt skydd
+        mot både shell-injektion och flagginjektion.
+        Skilj containernamn från image-referenser med registry,
+        tagg eller digest. Valideringen får inte förväxla formaten.
+        Vid nyckeldeploy ska befintliga authorized_keys bevaras.
+        Kontrollera idempotens och verifiering med den nya nyckeln.
+        När ProcessRunner ändras, kontrollera samtidig dränering
+        av stdout och stderr så fulla pipebuffertar inte låser processen.
+
+    # Hämtning av körbara verktyg.
+    - path: "{Sources/SSHCore/ExternalBinaryFetcher.swift,LinuxApp/src/{external_binary_fetcher,tool_release}.rs}"
+      instructions: |
+        När hämtning eller cache ändras, kontrollera att både hämtade
+        och återanvända bytes verifieras mot förväntad SHA256 innan
+        de lämnas ut som en giltig körbar fil.
+        Vid arkivhämtning, skilj arkivets checksumma från den
+        extraherade binärens checksumma.
+        Kontrollera valt OS, arkitektur och arkivmedlem samt att
+        obetrodda namn inte kan skriva utanför cachekatalogen.
+        En felaktig cachepost får inte köras som reserv vid nätverksfel.
+
+    # S3-kompatibla tjänster.
+    - path: "{Sources/SSHCore/S3Client.swift,LinuxApp/src/s3.rs}"
+      instructions: |
+        När SigV4 eller URL-bygge ändras, jämför canonical request
+        med den URL, Host-header, frågesträng och payload som skickas.
+        Kontrollera icke-standardportar, specialtecken i objektnycklar,
+        sorterade query-parametrar och befintligt path-style-stöd.
+        Kontrollera signaturvektorer och att HTTP-fel inte rapporteras
+        som lyckade objektoperationer.
+
+    # Apple-projektets beroende- och targetgränser.
+    - path: "App/{Package.swift,project.yml,project.dependencies.yml,generate-project.sh}"
+      instructions: |
+        När SwiftTerm-version eller projektgenerering ändras,
+        kontrollera kedjan App/Package.swift, SWIFTTERM_VERSION,
+        project.dependencies.yml och generate-project.sh.
+        Kontrollera att App/Package.swift inte blir vanlig app-source
+        och att tvOS-targeten inte oavsiktligt får SwiftTerm eller
+        iOS/macOS-filer som använder otillgängliga API:er.
+        Bevara apparnas användning av SSHCore från rotpaketet.
+
+    # Publicering av versioner.
+    - path: ".github/{workflows/release.yml,scripts/semantic_release.py,scripts/wait_for_checks.py,release-baseline,release-required-checks}"
+      instructions: |
+        När releasebeslut eller kontrollgrind ändras, kontrollera
+        att tagg, kontroller och publicering avser samma target_sha.
+        Saknade, väntande eller misslyckade obligatoriska kontroller
+        får inte räknas som godkända. Kontrollera paginering och
+        senaste resultat per kontroll och utfärdare vid omkörningar.
+        Vid samtidiga releaser eller omförsök, kontrollera att en
+        befintlig taggs mål verifieras och att samma release inte
+        publiceras på nytt med annat innehåll.
+        Kontrollera stabila versioner, rc och promote mot parsern
+        och befintliga releaseankare utan att kringgå kontrollgrinden.

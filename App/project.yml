@@ -1,0 +1,279 @@
+# XcodeGen-spec → genererar Bastion.xcodeproj. Kör på Mac:
+#   brew install xcodegen
+#   cd App && xcodegen generate && open Bastion.xcodeproj
+# DEVELOPMENT_TEAM är redan satt nedan (S6ZR2VU68T) — automatisk signering
+# fungerar direkt, både lokalt i Xcode och i testflight.yml-workflowet.
+name: Bastion
+options:
+  bundleIdPrefix: se.denied
+  deploymentTarget:
+    iOS: "17.0"       # ContentUnavailableView m.m.
+    macOS: "14.0"
+    tvOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    from: "1.99.1"
+  # Kärnan (SSHCore) ligger i repo-roten en nivå upp.
+  Bastion:
+    path: ..
+
+targets:
+  Bastion:
+    type: application
+    platform: iOS
+    sources:
+      - path: .
+        excludes:
+          - "project.yml"
+          - "Package.swift"
+          - "*.md"
+          - "*.entitlements"
+          # Egen tv-target (Bastion-tvOS, sources: TVApp/) — utan denna
+          # exkludering plockade `path: .` upp App/TVApp/*.swift i BÅDE
+          # iOS- och macOS-targeten också (rekursiv sources-sökväg), vilket
+          # gav en andra @main-App-struct (TVBastionApp) i samma modul.
+          # Exkluderingen behövs alltså oavsett vilka paket projektet drar
+          # in. Historik: symptomet visade sig ursprungligen som en trasig
+          # paketupplösning ("Unable to resolve module dependency:
+          # den tidigare telemetrymodulen", PR #191) — verifierat genom att isolera orsaken
+          # lokalt: felet kvarstod även med Bastion-tvOS-targeten helt
+          # borttagen, men försvann inte förrän TVApp/ exkluderades från de
+          # andra targetens sources. den tidigare telemetrymodulen är sedermera borttagen; den
+          # dubbla @main-strukten var alltid den faktiska orsaken.
+          - "TVApp/*"
+          # macOS-målets Info.plist saknades här (macOS-målet exkluderar
+          # omvänt redan iOS "Info.plist" nedan) — utan den här bäddades
+          # den in RÅ (ingen $(VARIABEL)-substitution, ingen
+          # CFBundleSupportedPlatforms) i den arkiverade iOS-appen som en
+          # extra resursfil. Xcodes arkivvalidering verkar skanna alla
+          # bäddade plist-liknande filer, inte bara appens egen Info.plist
+          # — den trasiga filen fick exporten att misslyckas med
+          # "Couldn't find platform family for Bastion.app", trots att
+          # appens EGEN Info.plist redan hade rätt nyckel (tolfte riktiga
+          # testflight.yml-körningen, 2026-07-08 — hittat genom att
+          # faktiskt inspektera .xcarchive-innehållet, inte gissat).
+          - "Info-macOS.plist"
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Bastion
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        # UISupportedInterfaceOrientations(~ipad) finns redan i den
+        # RÅA Info.plist-filen (path: ovan), men de verkar tystas ut
+        # under arkiveringen — bara nycklar satta HÄR under `properties`
+        # visade sig faktiskt hamna i det byggda paketet (trettonde
+        # riktiga testflight.yml-körningen, 2026-07-08: arkivering,
+        # export och signering lyckades äntligen helt, men den RIKTIGA
+        # uppladdningen mot Apples servrar avvisades — "Invalid bundle.
+        # No orientations were specified... To support iPad
+        # multitasking" — verifierat direkt genom att inspektera den
+        # faktiskt byggda Info.plist:en, orienteringsnycklarna saknades
+        # helt trots att källfilen hade dem).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Samma tystnads-bugg som orienteringsnycklarna ovan: fanns redan i
+        # RÅA Info.plist (PR #140) men Build 2 (2026-07-09) visade ändå
+        # `uses_non_exempt_encryption: nil` / `MISSING_EXPORT_COMPLIANCE`
+        # via App Store Connect-API:t efter uppladdning — måste alltså
+        # även sättas HÄR för att faktiskt hamna i det byggda paketet.
+        ITSAppUsesNonExemptEncryption: false
+        # Samma tystnads-bugg en TREDJE gång: NSFaceIDUsageDescription
+        # fanns redan i RÅA Info.plist, men Build 5 (2026-07-22) kraschade
+        # ändå direkt vid uppstart med SIGABRT — "This app has crashed
+        # because it attempted to access privacy-sensitive data without a
+        # usage description" (verifierat via tidigare kraschrapport,
+        # symboliserad via tidigare symboluppladdning). Måste alltså även
+        # sättas HÄR, exakt samma mönster som orienteringarna/export-
+        # compliance ovan.
+        NSFaceIDUsageDescription: "Lås upp Bastion med Face ID i stället för att skriva ett lösenord varje gång."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.denied.bastion
+        DEVELOPMENT_TEAM: S6ZR2VU68T
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+        SWIFT_VERSION: "5.9"
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # CODE_SIGN_STYLE måste vara KONSEKVENT över ALLA konfigurationer
+        # (Debug OCH Release), inte bara satt under `configs.Release` —
+        # XcodeGen härleder pbxproj:ens TargetAttributes.ProvisioningStyle
+        # (det Xcodes signeringsmotor faktiskt läser) genom att jämföra
+        # CODE_SIGN_STYLE mellan konfigurationer; om de INTE matchar sätts
+        # attributet inte alls och förblir Automatic i praktiken, trots
+        # att build-settingen säger Manual. Femte riktiga testflight.yml-
+        # körningen (2026-07-07) fick just den motsägelsen: "automatically
+        # signed for development, but a conflicting code signing identity
+        # Apple Distribution has been manually specified" — trots
+        # CODE_SIGN_STYLE: Manual under configs.Release. "No devices"-felet
+        # i den FJÄRDE körningen (ren Automatic-signering) hade en separat
+        # förklaring: automatisk signering under arkivering vill som
+        # standard skapa en "iOS App Development"-profil (normalt korrekt
+        # — export-steget, inte arkiveringen, avgör distributionstyp) men
+        # det kräver minst en registrerad testenhet på kontot, och vi har
+        # noll. Manual + en uttrycklig Distribution-identitet kringgår
+        # utvecklingsprofil-vägen helt.
+        CODE_SIGN_STYLE: Manual
+      # Manual signering kräver en UTTRYCKLIG PROVISIONING_PROFILE_
+      # SPECIFIER. Namnet nedan är det VERKLIGA namnet match faktiskt
+      # skapade och sparade i blixten85/bastion-certificates (omgenererat
+      # 2026-07-28 efter en cert-kris: `.gitignore` i certs-repot hade av
+      # misstag fått en `*.p12`-regel — troligen från en tidigare "remove
+      # hardcoded secret"-städning som missförstod att .p12-filerna redan
+      # är krypterade av match — vilket TYST blockerade varje `git push`
+      # av nya certifikat sedan dess. Ingen ny cert kunde någonsin sparas,
+      # så det gamla till slut blev ogiltigt utan att ett nytt kunde ta
+      # dess plats. `.gitignore`-regeln borttagen samma dag. Match namngav
+      # denna gång profilen UTAN tidsstämpel-suffix (till skillnad från
+      # tidigare bootstrap-omgångar) eftersom föregångaren nukades rent
+      # innan den nya skapades. Statiskt namn är fastlanes egna
+      # rekommenderade mönster (inte en miljövariabel som
+      # `$(sigh_..._profile-name)`, trots att den också skulle fungera) —
+      # se docs.fastlane.tools/codesigning/xcode-project. Om profilen
+      # någonsin regenereras (ny `match`-bootstrap) måste den här raden
+      # uppdateras till det nya namnet.
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+          PROVISIONING_PROFILE_SPECIFIER: "Bastion Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "match AppStore se.denied.bastion"
+    dependencies:
+      - package: SwiftTerm
+      - package: Bastion
+        product: SSHCore
+
+  Bastion-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: .
+        excludes:
+          - "project.yml"
+          - "Package.swift"
+          - "*.md"
+          - "Info.plist"
+          - "*.entitlements"
+          - "TVApp/*"
+    info:
+      path: Info-macOS.plist
+      properties:
+        # OAuth-redirect (se OAuthProviders.swift/Info.plist-kommentaren för iOS).
+        CFBundleURLTypes:
+          - CFBundleURLName: se.denied.bastion.oauth
+            CFBundleURLSchemes: [se.denied.bastion]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.denied.bastion
+        DEVELOPMENT_TEAM: S6ZR2VU68T
+        PRODUCT_NAME: Bastion
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Samma resonemang som Bastion (iOS)-targetet ovan.
+        CODE_SIGN_STYLE: Manual
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+          PROVISIONING_PROFILE_SPECIFIER: "Bastion macOS Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "Bastion macOS App Store"
+    # App Sandbox + utgående nätverk (SSH kräver klient-nätverk) + seriella
+    # enheter (App/SerialConnectView.swift — utan device.serial nekar
+    # sandboxen open() på /dev/cu.*/tty.* i signerade byggen, cubic P1 på
+    # PR #187). XcodeGen genererar entitlements-filen ur detta.
+    entitlements:
+      path: Bastion-macOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.device.serial: true
+    dependencies:
+      - package: SwiftTerm
+      - package: Bastion
+        product: SSHCore
+
+  Bastion-tvOS:
+    # Egen, minimal tv-app — INTE samma target som iOS/macOS. Siri Remote
+    # saknar praktiskt tangentbord för interaktiv terminal, så scope är
+    # avsiktligt begränsat till en dashboard (App/TVApp/): värdlista +
+    # Wake-on-LAN. Ingen SwiftTerm-dependency alls, till skillnad från de
+    # andra targeten.
+    type: application
+    platform: tvOS
+    sources:
+      - path: TVApp
+    info:
+      path: Info-tvOS.plist
+      properties:
+        CFBundleDisplayName: Bastion
+        # Samma resonemang som iOS-targeten ovan — måste sättas HÄR under
+        # `properties`, annars saknas nyckeln i det byggda paketet och
+        # App Store Connect-uppladdningen avvisas med MISSING_EXPORT_
+        # COMPLIANCE (cubic-fynd, PR #191).
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: se.denied.bastion.tv
+        DEVELOPMENT_TEAM: S6ZR2VU68T
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.9"
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        # tvOS vill ha en "App Icon & Top Shelf Image"-brandassets-katalog,
+        # inte en enkel .appiconset (actool-varning "None of the input
+        # catalogs contained a matching App Icon & Top Shelf Image brand
+        # assets collection" annars — verifierat mot Xcode 26.6/tvOS 26.5).
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        # Samma resonemang som iOS/macOS-targeten ovan: Automatic-signering
+        # under arkivering kan inte konsumera den `match`-hämtade profilen
+        # (fastlane/testflight.yml kör `match readonly` + `build_app
+        # export_method: app-store`), och ren Automatic-signering
+        # misslyckas dessutom på CI-runnern (samma "No devices"/
+        # "conflicting code signing identity"-fällor som iOS dokumenterar).
+        # Manual + uttrycklig Distribution-identitet krävs — måste sättas i
+        # `base` så CODE_SIGN_STYLE är KONSEKVENT över Debug OCH Release
+        # (XcodeGen härleder annars ProvisioningStyle fel, se iOS-kommentaren).
+        CODE_SIGN_STYLE: Manual
+      # Profilnamnet nedan är `match`-standardnamnet för AppStore-profilen på
+      # se.denied.bastion.tv. Om bootstrap-körningen (`match AppStore
+      # se.denied.bastion.tv` med readonly:false, se Fastfile-kommentaren)
+      # lägger till ett tidsstämpel-suffix (som hände iOS-profilen vid en
+      # namnkrock) MÅSTE den här raden uppdateras till det verkliga namnet.
+      configs:
+        # Debug pekar INTE på en uttrycklig profil: någon "Bastion tvOS
+        # Development"-profil finns inte än och ingår inte i den dokumenterade
+        # bootstrap-processen (till skillnad från iOS-targetens redan skapade
+        # dev-profil). Bara Apple Development-identiteten — lokal utveckling
+        # väljer profil automatiskt, och CI bygger osignerat (CODE_SIGNING_
+        # ALLOWED=NO i xcode.yml). Release nedan är den enda som behöver den
+        # manuellt bootstrappade match-profilen.
+        Debug:
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "match AppStore se.denied.bastion.tv"
+    dependencies:
+      - package: Bastion
+        product: SSHCore
