@@ -3,9 +3,9 @@ import PackageDescription
 
 // Bastion — kärnbibliotek + CLI för att bevisa SSH-transporten.
 // SSHCore och bastion-cli bygger på Linux OCH Apple (ren SwiftNIO-kod).
-// Terminal-UI:t (SwiftTerm) ligger i App/ och byggs bara i Xcode — se App/README.md.
-// Linux-GUI:t (SwiftCrossUI/GTK4) ligger i LinuxApp/ som ett EGET paket — se
-// LinuxApp/Package.swift för varför det medvetet inte ligger här.
+// Terminal-UI:t (SwiftTerm) ligger i App/ och byggs bara i Xcode — se docs/arkitektur.md.
+// Linux-, Windows- och Android-apparna ligger i egna repon (bastion_linux,
+// bastion_windows och bastion_android) och delar ingen kod med det här paketet.
 let package = Package(
     name: "bastion",
     platforms: [

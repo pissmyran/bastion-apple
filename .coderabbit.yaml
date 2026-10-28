@@ -5,7 +5,7 @@ inheritance: true
 reviews:
   path_instructions:
     # SSH-tillit och autentisering.
-    - path: "{Sources/SSHCore/{HostKeyValidator,KnownHosts,SSHUserAuth,SSHSession}.swift,LinuxApp/src/{known_hosts,ssh}.rs,WindowsApp/Bastion.Core/{KnownHosts,SshSession,HostAuth}.cs,Android/app/src/main/kotlin/se/denied/bastion/ssh/BastionSshSession.kt}"
+    - path: "Sources/SSHCore/{HostKeyValidator,KnownHosts,SSHUserAuth,SSHSession}.swift"
       instructions: |
         När värdnyckelkontroll eller autentisering ändras, kontrollera
         att TOFU fortfarande skiljer första anslutningen från en ändrad
@@ -18,7 +18,7 @@ reviews:
         uttryckliga forwardAgent-val fortfarande styr åtkomsten.
 
     # Samtidighet och anslutningars livstid.
-    - path: "{Sources/SSHCore/{SSHSession,SSHShell,SFTPClient}.swift,App/{ChainConnector,TerminalView}.swift,App/TVApp/ChainConnector.swift,LinuxApp/src/ssh.rs,WindowsApp/Bastion.Core/SshSession.cs,Android/app/src/main/kotlin/se/denied/bastion/ssh/BastionSshSession.kt}"
+    - path: "{Sources/SSHCore/{SSHSession,SSHShell,SFTPClient}.swift,App/{ChainConnector,TerminalView}.swift,App/TVApp/ChainConnector.swift}"
       instructions: |
         När anslutning, keepalive eller stängning ändras, följ samtidiga
         connect-, kanalöppnings- och close-förlopp samt autentiseringsfel.
@@ -31,7 +31,7 @@ reviews:
         och respektive plattforms sessionstester som regressionsunderlag.
 
     # Beständigt format och sammanslagning.
-    - path: "{Sources/SSHCore/{Host,HostStore,Snippet,SnippetStore,SyncEngine}.swift,LinuxApp/src/{host,snippet,sync,fsutil}.rs,WindowsApp/Bastion.Core/{Host,HostAuth,HostStore,Snippet,SyncState,SyncEngine,ReferenceDate,FsUtil}.cs,Tests/fixtures/{host-wire-format,sync-state-wire-format}.json}"
+    - path: "{Sources/SSHCore/{Host,HostStore,Snippet,SnippetStore,SyncEngine}.swift,Tests/fixtures/{host-wire-format,sync-state-wire-format}.json}"
       instructions: |
         När serialisering eller lagring ändras, jämför fältnamn,
         UUID-kodning, datumepoken 2001-01-01 och tombstones-formatet
@@ -48,7 +48,7 @@ reviews:
         Ändra inte fixturer enbart för att dölja ett formatbrott.
 
     # Krypterat synkformat.
-    - path: "{Sources/SSHCore/SyncCrypto.swift,LinuxApp/src/sync_crypto.rs,WindowsApp/Bastion.Core/SyncCrypto.cs}"
+    - path: "Sources/SSHCore/SyncCrypto.swift"
       instructions: |
         När kuvertet eller kryptografin ändras, kontrollera BSYNC1,
         iterationsfältets big-endian-kodning, salt och ordningen
@@ -61,7 +61,7 @@ reviews:
         inte tolkas som ett tomt tillstånd som sedan skrivs tillbaka.
 
     # OAuth och molnsynk.
-    - path: "{App/{OAuthAccountManager,OAuthTokenStore,OAuthProviders,DropboxSyncProvider,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,App/TVApp/{TVDeviceFlowOAuthManager,TVOAuthTokenStore,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,LinuxApp/src/{oauth,sync_webdav}.rs}"
+    - path: "{App/{OAuthAccountManager,OAuthTokenStore,OAuthProviders,DropboxSyncProvider,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,App/TVApp/{TVDeviceFlowOAuthManager,TVOAuthTokenStore,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift}"
       instructions: |
         När OAuth-flödet ändras, kontrollera kopplingen mellan PKCE,
         state, callback och den redirect_uri som används i kodbytet.
@@ -92,7 +92,7 @@ reviews:
         även när läsning, skrivning eller avkodning misslyckas.
 
     # TCP- och SOCKS-vidarebefordran.
-    - path: "{Sources/SSHCore/{PortForward,SOCKSProxy}.swift,LinuxApp/src/{port_forward,socks_proxy}.rs}"
+    - path: "Sources/SSHCore/{PortForward,SOCKSProxy}.swift"
       instructions: |
         När bindning ändras, kontrollera att lokala och dynamiska
         forwards inte oavsiktligt exponeras utanför loopback.
@@ -104,7 +104,7 @@ reviews:
         eller avslut och att SOCKS-svar motsvarar anslutningsresultatet.
 
     # Kommandobyggare för fjärrsystem.
-    - path: "{Sources/SSHCore/{ArchiveOperations,KeyManagement,DockerService,ProcessRunner}.swift,LinuxApp/src/{archive,key_deploy}.rs,LinuxApp/integrations/src/docker.rs,WindowsApp/Bastion.Core/{ArchiveOperations,DockerService}.cs}"
+    - path: "Sources/SSHCore/{ArchiveOperations,KeyManagement,DockerService,ProcessRunner}.swift"
       instructions: |
         När filnamn, nycklar eller Docker-referenser når ett kommando,
         kontrollera rätt citering för det faktiska skalet samt skydd
@@ -117,7 +117,7 @@ reviews:
         av stdout och stderr så fulla pipebuffertar inte låser processen.
 
     # Hämtning av körbara verktyg.
-    - path: "{Sources/SSHCore/ExternalBinaryFetcher.swift,LinuxApp/src/{external_binary_fetcher,tool_release}.rs}"
+    - path: "Sources/SSHCore/ExternalBinaryFetcher.swift"
       instructions: |
         När hämtning eller cache ändras, kontrollera att både hämtade
         och återanvända bytes verifieras mot förväntad SHA256 innan
@@ -129,7 +129,7 @@ reviews:
         En felaktig cachepost får inte köras som reserv vid nätverksfel.
 
     # S3-kompatibla tjänster.
-    - path: "{Sources/SSHCore/S3Client.swift,LinuxApp/src/s3.rs}"
+    - path: "Sources/SSHCore/S3Client.swift"
       instructions: |
         När SigV4 eller URL-bygge ändras, jämför canonical request
         med den URL, Host-header, frågesträng och payload som skickas.

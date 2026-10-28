@@ -493,7 +493,7 @@ final class GitHubServiceTests: XCTestCase {
     /// Framgångsraden är stabil mellan gh-versioner; felmeddelandena är det
     /// inte.
     func testAuthenticationIsDetectedByTheSuccessLine() {
-        XCTAssertTrue(GitHubService.isAuthenticated("  ✓ Logged in to github.com account blixten85"))
+        XCTAssertTrue(GitHubService.isAuthenticated("  ✓ Logged in to github.com account example-user"))
         XCTAssertFalse(GitHubService.isAuthenticated("You are not logged into any GitHub hosts."))
         XCTAssertFalse(GitHubService.isAuthenticated(""))
     }

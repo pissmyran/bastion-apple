@@ -1,12 +1,12 @@
-# Bidra till Avkroken
+# Bidra till Bastion
 
-Tack för att du vill bidra till Avkrokens projekt. Den här guiden gäller som standard för Avkrokens publika repositories när ett repository inte har egna, mer specifika riktlinjer.
+Tack för att du vill bidra till Bastion. Den här guiden gäller som standard för Bastions publika repositories när ett repository inte har egna, mer specifika riktlinjer.
 
 ## Hitta rätt kanal
 
 - **Buggar:** skapa ett issue med felrapportmallen och ange tydliga steg för att återskapa problemet.
 - **Konkreta förbättringsförslag:** använd feature request-mallen.
-- **Frågor, tidiga idéer och öppna resonemang:** använd Avkrokens GitHub Discussions.
+- **Frågor, tidiga idéer och öppna resonemang:** använd repots GitHub Discussions.
 - **Säkerhetsproblem:** följ `SECURITY.md`. Publicera inte sårbarhetsdetaljer i ett publikt issue, en pull request eller en discussion.
 
 ## Arbetsflöde

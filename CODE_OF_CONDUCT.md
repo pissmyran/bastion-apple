@@ -1,6 +1,6 @@
 # Uppförandekod
 
-Avkrokens projekt ska vara sakliga, respektfulla och trygga att delta i. Det gäller i issues, pull requests, Discussions, kodgranskningar och andra ytor som hör till Avkrokens projekt.
+Bastion ska vara sakliga, respektfulla och trygga att delta i. Det gäller i issues, pull requests, Discussions, kodgranskningar och andra ytor som hör till Bastion.
 
 ## Förväntat beteende
 
@@ -26,7 +26,7 @@ Följande accepteras inte:
 
 ## Moderering
 
-Maintainers får redigera, dölja, låsa eller ta bort innehåll som bryter mot denna uppförandekod. Vid återkommande eller allvarliga överträdelser kan deltagare få begränsad åtkomst eller stängas av från Avkrokens samarbetsytor.
+Maintainers får redigera, dölja, låsa eller ta bort innehåll som bryter mot denna uppförandekod. Vid återkommande eller allvarliga överträdelser kan deltagare få begränsad åtkomst eller stängas av från Bastions samarbetsytor.
 
 Åtgärder ska stå i rimlig proportion till beteendets allvar, omfattning och upprepning.
 
@@ -40,4 +40,4 @@ För övriga överträdelser: kontakta en maintainer via en lämplig privat kana
 
 ## Omfattning
 
-Denna uppförandekod gäller som gemensam standard för Avkrokens repositories där ingen mer specifik lokal policy finns. En lokal policy i ett repository har företräde för det repositoryt.
+Denna uppförandekod gäller som gemensam standard för Bastions repositories där ingen mer specifik lokal policy finns. En lokal policy i ett repository har företräde för det repositoryt.

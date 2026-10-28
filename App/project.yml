@@ -131,7 +131,7 @@ targets:
         CODE_SIGN_STYLE: Manual
       # Manual signering kräver en UTTRYCKLIG PROVISIONING_PROFILE_
       # SPECIFIER. Namnet nedan är det VERKLIGA namnet match faktiskt
-      # skapade och sparade i blixten85/bastion-certificates (omgenererat
+      # skapade och sparade i match-repot (omgenererat
       # 2026-07-28 efter en cert-kris: `.gitignore` i certs-repot hade av
       # misstag fått en `*.p12`-regel — troligen från en tidigare "remove
       # hardcoded secret"-städning som missförstod att .p12-filerna redan

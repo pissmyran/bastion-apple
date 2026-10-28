@@ -1,10 +1,10 @@
 # Support
 
-Avkroken använder olika GitHub-funktioner beroende på vilken typ av hjälp eller återkoppling som behövs.
+Bastion använder olika GitHub-funktioner beroende på vilken typ av hjälp eller återkoppling som behövs.
 
 ## Frågor och hjälp
 
-Använd Avkrokens GitHub Discussions för frågor om användning, arbetssätt eller sådant som ännu inte är ett konkret fel eller ändringsförslag.
+Använd repots GitHub Discussions för frågor om användning, arbetssätt eller sådant som ännu inte är ett konkret fel eller ändringsförslag.
 
 ## Fel
 
@@ -12,7 +12,7 @@ Använd GitHub Issues i det repository där problemet finns när du kan beskriva
 
 ## Förbättringar och idéer
 
-Konkreta förbättringsförslag kan lämnas som issues i berört repository. Tidiga idéer och öppna resonemang hör hemma i Avkrokens Discussions.
+Konkreta förbättringsförslag kan lämnas som issues i berört repository. Tidiga idéer och öppna resonemang hör hemma i repots Discussions.
 
 ## Säkerhetsproblem
 
@@ -24,4 +24,4 @@ För kod- och dokumentationsändringar, följ `CONTRIBUTING.md` och repositoryts
 
 ## Omfattning
 
-Avkrokens projekt underhålls efter tillgänglig tid. En fråga eller rapport innebär därför inte någon garanterad svarstid, felsökning eller leverans av en viss ändring.
+Bastion underhålls efter tillgänglig tid. En fråga eller rapport innebär därför inte någon garanterad svarstid, felsökning eller leverans av en viss ändring.

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Bastion
-Comment=Fri, öppen, fristående SSH-klient
-Exec=bastion-linuxapp
-Icon=utilities-terminal
-Terminal=false
-Categories=Network;RemoteAccess;

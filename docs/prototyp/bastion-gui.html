@@ -385,7 +385,7 @@ const HOSTS = [
   {id:"api-02", tag:"Produktion", role:"API", user:"deploy", addr:"10.0.4.12", port:22, state:"ok",
    os:"Ubuntu 24.04 LTS", kernel:"6.8.0-41-generic", uptime:"11 d 2 tim", cores:4, load:[1.12,0.94,0.88],
    mem:{used:6.9,total:8}, disk:{used:61,total:200}, temp:47, users:["deploy"],
-   ips:["10.0.4.12"], auth:"ed25519-sk · YubiKey", jump:"bastion.denied.se",
+   ips:["10.0.4.12"], auth:"ed25519-sk · YubiKey", jump:"bastion.example.com",
    containers:[
      {name:"api", image:"ghcr.io/denied/api:2.3.1", state:"kör", up:"2 dagar", ports:"9000"},
      {name:"worker", image:"ghcr.io/denied/api:2.3.1", state:"kör", up:"2 dagar", ports:"—"},
@@ -420,7 +420,7 @@ const HOSTS = [
   {id:"kund-vinge", tag:"Kunder", role:"Applikation", user:"drift", addr:"vinge.example.net", port:2222, state:"off",
    os:"Rocky Linux 9.4", kernel:"5.14.0-427.el9", uptime:"—", cores:4, load:[0,0,0],
    mem:{used:0,total:16}, disk:{used:0,total:250}, temp:0, users:[],
-   ips:["203.0.113.44"], auth:"ed25519-cert · CA denied-ca", jump:"bastion.denied.se",
+   ips:["203.0.113.44"], auth:"ed25519-cert · CA example-ca", jump:"bastion.example.com",
    containers:[]}
 ];
 
@@ -449,7 +449,7 @@ const SNIPPETS = [
   {name:"Största katalogerna", cmd:"du -sh {{sökväg}}/* | sort -h | tail -10",
    vars:{"sökväg":"/srv"}, tag:"Linux"},
   {name:"Certifikat som går ut", cmd:"openssl x509 -enddate -noout -in {{fil}}",
-   vars:{fil:"/etc/ssl/denied.se.pem"}, tag:"Säkerhet"},
+   vars:{fil:"/etc/ssl/example.com.pem"}, tag:"Säkerhet"},
   {name:"Paket att uppdatera", cmd:"apt update -qq && apt list --upgradable",
    vars:{}, tag:"Linux"}
 ];

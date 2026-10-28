@@ -1,62 +1,57 @@
-# Dokumentation
+---
+title: Start
+template: home.html
+hide:
+  - navigation
+  - toc
+---
 
-Navigationssida för Bastion.
+<div class="grid cards" markdown>
 
-## Hitta rätt
+-   **Kom igång**
 
-| Om du arbetar med… | Läs |
-| --- | --- |
-| repositoryts plattformar och bygginvarianter | [Projektkontext](project-context.md) |
-| delad kärna och plattformsgränser | [Arkitektur](architecture.md) |
-| bygg/test för Swift, Apple, Android, Linux eller Windows | [Drift](operations.md) |
-| versionering, PR-titlar och GitHub Releases | [Release- och versionsstandard](release-standard.md) |
-| Apple-prototyper | [GUI-prototyp](prototyp/bastion-gui.html) |
-| säkerhetsrapportering | [Security policy](https://github.com/Avkroken/Bastion/security/policy) |
+    ---
 
-## Plattformskarta
+    Bygg, testa och kör appen.
 
-```text
-                    SSHCore
-                      |
-      +---------------+----------------+
-      |               |                |
- bastion-cli       Apple apps       other apps
-   Swift           iOS/macOS/tvOS    Android
-                                    Linux
-                                    Windows
-```
+    [Kom igång](kom-igang.md)
 
-## Kodområden
+-   **Arkitektur**
 
-- `Sources/` — delad Swift-kärna och CLI-kod.
-- `Tests/` — Swift-package tester.
-- `App/` — XcodeGen-baserade Apple-appar.
-- `Android/` — Androidprojekt.
-- `LinuxApp/` — separat Linuxpaket.
-- `WindowsApp/` — Windowsapplikation.
+    ---
 
-## Viktiga läsvägar
+    Hur koden är uppdelad och var säkerhetsgränserna går.
 
-### Apple/Xcode
+    [Arkitektur](arkitektur.md)
 
-Läs project-context och operations innan `Package.swift`, XcodeGen-spec eller generation scripts ändras.
+-   **Drift och verifiering**
 
-### Swift-kärna
+    ---
 
-Läs root `Package.swift`, `Sources/` och `Tests/`.
+    Kontroller före push, CI och felsökning.
 
-### Android
+    [Drift och verifiering](drift.md)
 
-Läs Androids Gradlekonfiguration och operations-dokumentets dependency-graph-gräns.
+-   **Synkformat**
 
-### Linux/Windows
+    ---
 
-Behandla respektive app som separat builddomän med egen toolchain, men låt gemensam protokoll-/SSH-logik ligga i avsedd delad kärna där arkitekturen medger det.
+    Formatet som värdlistan delar mellan plattformarna.
 
-### Release
+    [Synkformat](synkformat.md)
 
-Läs release-standard för Conventional Commit-kompatibla PR-titlar, SemVer, GitHub Release-gränsen och varför repositoryrelease inte implicit innebär plattformsdistribution.
+-   **Release**
 
-## Wiki
+    ---
 
-Om GitHub Wiki används kan den ge en klickbar plattformsindelad manual. Den ska spegla den versionsstyrda dokumentationen här; repo-specifik teknisk current-state ska inte bara finnas i Wiki.
+    Versioner, taggar och hur dokumentationen publiceras.
+
+    [Release](release.md)
+
+-   **Andra plattformar**
+
+    ---
+
+    [Bastion för Linux](https://github.com/pissmyran/bastion_linux)<br>[Bastion för Windows](https://github.com/pissmyran/bastion_windows)<br>[Bastion för Android](https://github.com/pissmyran/bastion_android)
+
+</div>
