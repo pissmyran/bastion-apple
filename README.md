@@ -1,38 +1,38 @@
-# Bastion för Apple
+# Bastion for Apple
 
-**Dokumentation:** [pissmyran.github.io/bastion_apple](https://pissmyran.github.io/bastion_apple/)
+**Documentation:** [pissmyran.github.io/bastion_apple](https://pissmyran.github.io/bastion_apple/)
 
-Bastion är en SSH-klient. Det här repot innehåller versionen för iOS, iPadOS, macOS och tvOS, byggd med Swift, SwiftNIO SSH, SwiftUI och XcodeGen. Övriga plattformar har egna repon: [Bastion för Linux](https://github.com/pissmyran/bastion_linux), [Bastion för Windows](https://github.com/pissmyran/bastion_windows), [Bastion för Android](https://github.com/pissmyran/bastion_android).
+Bastion is an SSH client. This repo holds the version for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/pissmyran/bastion_linux), [Bastion for Windows](https://github.com/pissmyran/bastion_windows), [Bastion for Android](https://github.com/pissmyran/bastion_android). The [Bastion hub](https://github.com/pissmyran/bastion) ties them together.
 
-## Innehåll
+## Contents
 
-| Plats | Innehåll |
+| Path | Contents |
 | --- | --- |
-| `Sources/SSHCore/` | Delad SSH-kärna: sessioner, SFTP, vidarebefordran, synk och kryptering |
-| `Sources/bastion-cli/` | Kommandoradsverktyg ovanpå SSHCore |
-| `Tests/` | Tester för SSHCore och de gemensamma fixturerna för synkformatet |
-| `App/` | iOS-, iPadOS- och macOS-appen, XcodeGen-spec och fastlane |
-| `App/TVApp/` | tvOS-appen |
-| `Package.swift` | Swift-paketet med SSHCore och bastion-cli |
+| `Sources/SSHCore/` | Shared SSH core: sessions, SFTP, forwarding, sync and encryption |
+| `Sources/bastion-cli/` | Command-line tool on top of SSHCore |
+| `Tests/` | Tests for SSHCore and the shared sync-format fixtures |
+| `App/` | The iOS, iPadOS and macOS app, the XcodeGen spec and fastlane |
+| `App/TVApp/` | The tvOS app |
+| `Package.swift` | The Swift package with SSHCore and bastion-cli |
 
-## Kom igång
+## Getting started
 
-Bygg och testa Swift-paketet (fungerar på Linux och macOS):
+Build and test the Swift package (works on Linux and macOS):
 
 ```bash
 swift build && swift test
 ```
 
-Generera Xcode-projektet (bara på macOS):
+Generate the Xcode project (macOS only):
 
 ```bash
 sh App/generate-project.sh
 ```
 
-Apparna byggs med Xcode på macOS. Targets: `Bastion` (iOS och iPadOS), `Bastion-macOS` och `Bastion-tvOS`. Kör alltid `App/generate-project.sh`, aldrig `xcodegen` direkt: skriptet läser beroendeversionerna i `App/Package.swift` och skickar dem vidare.
+The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Bastion-macOS` and `Bastion-tvOS`. Always run `App/generate-project.sh`, never `xcodegen` directly: the script reads the dependency versions in `App/Package.swift` and passes them on.
 
-## Mer
+## More
 
-- [Dokumentationen](https://pissmyran.github.io/bastion_apple/) – kom igång, arkitektur, drift, synkformat och release
-- [SECURITY.md](SECURITY.md) – rapportera en sårbarhet
-- [CONTRIBUTING.md](CONTRIBUTING.md) – bidra
+- [The documentation](https://pissmyran.github.io/bastion_apple/): getting started, architecture, operations, sync format and releases
+- [SECURITY.md](SECURITY.md): report a vulnerability
+- [CONTRIBUTING.md](CONTRIBUTING.md): contribute

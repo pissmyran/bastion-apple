@@ -1,11 +1,11 @@
 // swift-tools-version:5.9
 import PackageDescription
 
-// Bastion — kärnbibliotek + CLI för att bevisa SSH-transporten.
-// SSHCore och bastion-cli bygger på Linux OCH Apple (ren SwiftNIO-kod).
-// Terminal-UI:t (SwiftTerm) ligger i App/ och byggs bara i Xcode — se docs/arkitektur.md.
-// Linux-, Windows- och Android-apparna ligger i egna repon (bastion_linux,
-// bastion_windows och bastion_android) och delar ingen kod med det här paketet.
+// Bastion: core library plus a CLI that proves the SSH transport.
+// SSHCore and bastion-cli build on Linux AND Apple platforms (pure SwiftNIO code).
+// The terminal UI (SwiftTerm) lives in App/ and is only built in Xcode; see docs/architecture.md.
+// The Linux, Windows and Android apps live in their own repos (bastion_linux,
+// bastion_windows and bastion_android) and share no code with this package.
 let package = Package(
     name: "bastion",
     platforms: [
@@ -16,24 +16,23 @@ let package = Package(
         .executable(name: "bastion-cli", targets: ["bastion-cli"]),
     ],
     dependencies: [
-        // Tillfällig branch tills apple/swift-nio-ssh accepterar swift-crypto 5.x.
-        // Uppströms fix: https://github.com/apple/swift-nio-ssh/pull/259
-        // Branch-referensen flyter; byt tillbaka till officiell release när fixen släppts.
+        // Temporary branch until apple/swift-nio-ssh accepts swift-crypto 5.x.
+        // Upstream fix: https://github.com/apple/swift-nio-ssh/pull/259
+        // The branch reference floats; switch back to an official release once the fix ships.
         .package(url: "https://github.com/simonjbeaumont/swift-nio-ssh.git", branch: "widen-swift-crypto"),
-        // Exakt pinnad p.g.a. apple/swift-nio#3647: swift-nios EGNA
-        // Sendable/IPPROTO-kompileringsfel på Windows, som bara triggas när
-        // dess källor kompileras i Swift 6-strict-concurrency-läge — styrs av
-        // PAKETETS EGEN deklarerade tools-version, inte konsumentens.
-        // Pinningen infördes ursprungligen på 2.86.2 (windows-gui.yml gick då
-        // grönt för första gången: 74 misslyckade körningar innan, 0 lyckade)
-        // och har sedan flyttats upp till 2.101.3, som i skrivande stund är
-        // senaste releasen — pinningen håller alltså INTE tillbaka versionen.
-        // Den finns kvar enbart för att hindra automatiska bumpar innan
-        // #3647 är löst (Renovate-bump i PR #153 återinförde exakt den bugg
-        // PR #149 fixade). Kontrollerat 2026-08-11: #3647 fortfarande öppen.
-        // Byt tillbaka till `from:` när uppströms löser #3647 på riktigt.
+        // Pinned exactly because of apple/swift-nio#3647: swift-nio's OWN
+        // Sendable/IPPROTO compile errors on Windows, which only trigger when
+        // its sources are compiled in Swift 6 strict-concurrency mode, decided by
+        // the PACKAGE'S OWN declared tools version, not the consumer's.
+        // The pin was first added at 2.86.2 (windows-gui.yml then went
+        // green for the first time: 74 failed runs before, 0 successful)
+        // and has since moved up with each release, so the pin does NOT hold
+        // the version back. It only stops automatic bumps before
+        // #3647 is fixed (the Renovate bump in PR #153 brought back exactly the bug
+        // PR #149 fixed). Checked 2026-08-11: #3647 still open.
+        // Switch back to `from:` once upstream really fixes #3647.
         .package(url: "https://github.com/apple/swift-nio.git", exact: "2.104.0"),
-        // Behåll ett flytande versionsintervall så Renovate kan uppdatera miniminivån.
+        // Keep a floating version range so Renovate can raise the minimum.
         .package(url: "https://github.com/apple/swift-crypto.git", from: "5.0.3"),
     ],
     targets: [

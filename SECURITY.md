@@ -1,21 +1,21 @@
-# Säkerhetspolicy
+# Security policy
 
-## Rapportera en sårbarhet
+## Reporting a vulnerability
 
-Rapportera **inte** säkerhetsbrister, hemligheter, tokens, privata nycklar eller andra känsliga uppgifter i publika issues, pull requests eller discussions.
+Do **not** report security vulnerabilities, secrets, tokens, private keys or other sensitive data in public issues, pull requests or discussions.
 
-För repositoryt där problemet finns:
+In the repository where the problem is:
 
-1. Öppna fliken **Security**.
-2. Välj **Report a vulnerability** om privat sårbarhetsrapportering är aktiverad.
-3. Beskriv påverkan, berörd komponent, reproduktionssteg och eventuell föreslagen åtgärd utan att publicera informationen någon annanstans.
+1. Open the **Security** tab.
+2. Choose **Report a vulnerability** if private vulnerability reporting is enabled.
+3. Describe the impact, the affected component, steps to reproduce and any suggested fix, without publishing the information anywhere else.
 
-Om **Report a vulnerability** inte finns: skapa endast ett kort publikt issue som ber maintainern ange en privat kontaktväg. Ta inte med tekniska detaljer om sårbarheten i det publika issuet.
+If **Report a vulnerability** is not available: open only a short public issue asking the maintainer for a private contact channel. Leave out every technical detail about the vulnerability.
 
-## Vad som stöds
+## Supported versions
 
-Säkerhetsfixar prioriteras för den aktuella standardgrenen och, när projektet använder releaser, den senaste stödda releasen. Äldre grenar och versioner kan sakna säkerhetsuppdateringar.
+Security fixes are prioritized for the current default branch and, when the project uses releases, the latest supported release. Older branches and versions may not receive security updates.
 
-## Förväntad hantering
+## Handling
 
-En rapport ska innehålla tillräckligt med information för att problemet ska kunna verifieras. Maintainers avgör allvarlighetsgrad, omfattning, åtgärd och eventuell publicering genom GitHubs säkerhetsfunktioner.
+A report should contain enough information for the problem to be verified. Maintainers decide severity, scope, fix and any disclosure through GitHub's security features.

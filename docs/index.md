@@ -1,5 +1,5 @@
 ---
-title: Start
+title: Home
 template: home.html
 hide:
   - navigation
@@ -8,50 +8,50 @@ hide:
 
 <div class="grid cards" markdown>
 
--   **Kom igång**
+-   **Getting started**
 
     ---
 
-    Bygg, testa och kör appen.
+    Build, test and run the app.
 
-    [Kom igång](kom-igang.md)
+    [Getting started](getting-started.md)
 
--   **Arkitektur**
-
-    ---
-
-    Hur koden är uppdelad och var säkerhetsgränserna går.
-
-    [Arkitektur](arkitektur.md)
-
--   **Drift och verifiering**
+-   **Architecture**
 
     ---
 
-    Kontroller före push, CI och felsökning.
+    How the code is split and where the security boundaries are.
 
-    [Drift och verifiering](drift.md)
+    [Architecture](architecture.md)
 
--   **Synkformat**
-
-    ---
-
-    Formatet som värdlistan delar mellan plattformarna.
-
-    [Synkformat](synkformat.md)
-
--   **Release**
+-   **Operations and verification**
 
     ---
 
-    Versioner, taggar och hur dokumentationen publiceras.
+    Checks before pushing, CI and troubleshooting.
 
-    [Release](release.md)
+    [Operations](operations.md)
 
--   **Andra plattformar**
+-   **Sync format**
 
     ---
 
-    [Bastion för Linux](https://github.com/pissmyran/bastion_linux)<br>[Bastion för Windows](https://github.com/pissmyran/bastion_windows)<br>[Bastion för Android](https://github.com/pissmyran/bastion_android)
+    The format the host list shares between platforms.
+
+    [Sync format](sync-format.md)
+
+-   **Releases**
+
+    ---
+
+    Versions, tags and how the documentation is published.
+
+    [Releases](release.md)
+
+-   **Other platforms**
+
+    ---
+
+    [Bastion for Linux](https://github.com/pissmyran/bastion_linux)<br>[Bastion for Windows](https://github.com/pissmyran/bastion_windows)<br>[Bastion for Android](https://github.com/pissmyran/bastion_android)<br>[The Bastion hub](https://github.com/pissmyran/bastion)
 
 </div>

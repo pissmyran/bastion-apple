@@ -1,21 +1,22 @@
 # AGENTS.md
 
-## Läs först
+## Read first
 
-1. [CLAUDE.md](CLAUDE.md) – kärnregler, kommandon och granskning.
-2. [docs/arkitektur.md](docs/arkitektur.md) – komponenter och säkerhetsgränser.
-3. [docs/drift.md](docs/drift.md) – verifiering före push.
-4. [docs/synkformat.md](docs/synkformat.md) – när värdlistan eller synken berörs.
+1. [CLAUDE.md](CLAUDE.md): core rules, commands and review.
+2. [docs/architecture.md](docs/architecture.md): components and security boundaries.
+3. [docs/operations.md](docs/operations.md): verification before pushing.
+4. [docs/sync-format.md](docs/sync-format.md): when the host list or sync is involved.
 
-## Arbetsregler
+## Working rules
 
-- Gren, pull request och granskning följer kärnreglerna i `CLAUDE.md`.
-- Läs hela granskningen, även trådar som GitHub markerar som `outdated`, och kontrollera att grundproblemet faktiskt är löst.
-- Ändra byggvägar och manifest tillsammans med dokumentationen.
-- Värden som når ett skal hanteras via `env:` och citerade variabler.
-- Lägg aldrig hemligheter eller inloggningsuppgifter i repot eller i publik dokumentation.
+- Branches, pull requests and review follow the core rules in `CLAUDE.md`.
+- Read the whole review, including threads GitHub marks as `outdated`, and check that the root cause is actually fixed.
+- Change build paths and manifests together with the documentation.
+- Values that reach a shell go through `env:` and quoted variables.
+- Never put secrets or credentials in the repo or in public documentation.
+- Everything is written in English.
 
-## Agentfärdigheter
+## Agent skills
 
-- **Issues:** läs `docs/agents/issue-tracker.md` innan du läser, skapar eller publicerar ärenden.
-- **Domän:** följ `docs/agents/domain.md`.
+- **Issues:** read `docs/agents/issue-tracker.md` before reading, creating or publishing issues.
+- **Domain:** follow `docs/agents/domain.md`.

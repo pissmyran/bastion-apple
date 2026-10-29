@@ -1,60 +1,28 @@
-# Bidra till Bastion
+# Contributing to Bastion
 
-Tack för att du vill bidra till Bastion. Den här guiden gäller som standard för Bastions publika repositories när ett repository inte har egna, mer specifika riktlinjer.
+Thanks for wanting to contribute.
 
-## Hitta rätt kanal
+This repo holds Bastion for Apple. Changes to the sync format are made in [Bastion for Apple](https://github.com/pissmyran/bastion_apple); shared documentation lives in the [Bastion hub](https://github.com/pissmyran/bastion).
 
-- **Buggar:** skapa ett issue med felrapportmallen och ange tydliga steg för att återskapa problemet.
-- **Konkreta förbättringsförslag:** använd feature request-mallen.
-- **Frågor, tidiga idéer och öppna resonemang:** använd repots GitHub Discussions.
-- **Säkerhetsproblem:** följ `SECURITY.md`. Publicera inte sårbarhetsdetaljer i ett publikt issue, en pull request eller en discussion.
+## Reporting
 
-## Arbetsflöde
+- **Bugs and requests:** open an issue with the matching form. The bug form applies the `bug` label and the feature form the `enhancement` label.
+- **Security problems:** follow [SECURITY.md](SECURITY.md). Never publish vulnerability details in an issue, pull request or discussion.
 
-1. Utgå från repositoryts aktuella default branch.
-2. Gör ändringen i en separat arbetsgren enligt `{agent}/{feature}/{date}`, där `date` skrivs som `YYYY-MM-DD`.
-3. Håll ändringen så liten, semantisk och fokuserad som möjligt.
-4. Kör relevanta tester, linting, byggsteg och andra kontroller som finns i repositoryt.
-5. Öppna en pull request mot aktuell default branch och beskriv vad som ändras och varför.
-6. Läs hela review-state, inklusive kommentarer och trådar som GitHub markerar som `outdated`, och verifiera att grundproblemen är lösta i aktuell kod.
-7. Låt automatiska kontroller och repository-regler bli gröna innan merge.
-8. Färdigställ den öppna arbetsgrenen, draften eller PR:n innan agenten påbörjar nästa uppgift i samma repository. Om arbetet inte kan slutföras ska det uttryckligen avslutas eller markeras med konkret blocker.
+## Workflow
 
-Arbetet ska vara seriellt och semantiskt per repository. En arbetsgren/PR motsvarar en sammanhängande feature eller uppgift och `feature`-delen ska beskriva arbetet semantiskt.
+1. Start from the latest `main` and work on your own branch.
+2. Keep the change small and focused.
+3. Run the tests under Commands in `CLAUDE.md` and build the documentation with `zensical build --strict`.
+4. Open a pull request against `main` with a title that follows Conventional Commits, for example `fix: …`.
+5. Let the reviews and checks turn green before merging.
 
-Om `{agent}/{feature}/{date}` redan finns för uppgiften ska agenten fortsätta den arbetslinjen. Skapa inte tids-/ID-suffix eller parallella branchvarianter för att kringgå ett upptaget namn.
+Everything is written in English: code, comments, documentation, commit messages and pull requests.
 
-Commits ska använda Conventional Commits eller motsvarande tydlig typ, till exempel `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `build:`, `refactor:` eller `test:`.
+## Sensitive information
 
-## Pull requests
+Never commit passwords, tokens, keys, personal data or other secrets, and never put them in issues, pull requests or screenshots. If something leaks by mistake, treat it as compromised and rotate it.
 
-En bra pull request ska:
+## License
 
-- lösa ett tydligt avgränsat problem,
-- undvika orelaterade ändringar,
-- behålla befintligt beteende om ändringen inte uttryckligen ska ändra det,
-- innehålla eller uppdatera tester när det är relevant,
-- uppdatera dokumentation när användarbeteende, konfiguration eller gränssnitt ändras,
-- inte innehålla genererade filer, binärer eller andra artefakter som repositoryt inte redan versionshanterar.
-
-## Kod och kvalitet
-
-Följ repositoryts befintliga struktur, namngivning, formattering och verktyg. Om projektet har egna instruktioner i exempelvis `README.md`, `docs/`, `AGENTS.md` eller motsvarande gäller de före den här generella guiden.
-
-Undvik onödiga beroenden och håll säkerhetsrelaterade förändringar så transparenta och granskningsbara som möjligt.
-
-## Känslig information
-
-Lägg aldrig in lösenord, tokens, API-nycklar, privata nycklar, personuppgifter eller andra hemligheter i commits, issues, pull requests, discussions, loggar eller skärmbilder.
-
-Om känslig information råkar publiceras ska den behandlas som komprometterad och roteras eller återkallas där det är möjligt.
-
-## Licens och rättigheter
-
-Genom att bidra intygar du att du har rätt att skicka in ändringen. Bidrag omfattas av repositoryts licens och övriga tillämpliga villkor.
-
-## Repository-specifika regler
-
-Följ repositoryts egna `CONTRIBUTING.md`, `AGENTS.md` och dokumentation när sådana finns. Intern drift- och arkitekturkontext publiceras inte genom det här repositoryt.
-
-Om ett repository innehåller en lokal `CONTRIBUTING.md` gäller den före den här gemensamma standarden.
+By contributing you confirm that you have the right to submit the change. Contributions are covered by the repository's license.

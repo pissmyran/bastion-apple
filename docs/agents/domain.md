@@ -1,14 +1,14 @@
-# Domändokumentation
+# Domain documentation
 
-Repot använder en enda dokumentationskontext.
+The repo uses a single documentation context.
 
-## Läs före domänkänsligt arbete
+## Read before domain-sensitive work
 
-1. `docs/arkitektur.md` för komponenter och säkerhetsgränser.
-2. `docs/drift.md` för verifiering och kända villkor.
-3. `docs/synkformat.md` när värdlistan eller synken berörs.
-4. ADR:er under `docs/adr/`, om sådana finns.
+1. `docs/architecture.md` for components and security boundaries.
+2. `docs/operations.md` for verification and known conditions.
+3. `docs/sync-format.md` when the host list or sync is involved.
+4. ADRs under `docs/adr/`, if there are any.
 
-Saknas `docs/adr/` är det inget fel. Skapa inte tomma filer bara för att följa konventionen.
+A missing `docs/adr/` is not an error. Do not create empty files just to follow the convention.
 
-Använd repots befintliga ord. Krockar ett förslag med ett dokumenterat beslut, säg det uttryckligen i stället för att skriva över beslutet i tysthet.
+Use the repo's existing terms. If a proposal conflicts with a documented decision, say so explicitly instead of silently overriding the decision.

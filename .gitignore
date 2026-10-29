@@ -6,8 +6,8 @@ Package.resolved
 .env
 .sentryclirc
 
-# fastlane (App/) — transienta körningsartefakter, inte konfiguration.
-# Gemfile.lock committas medvetet (reproducerbar CI-körning).
+# fastlane (App/): transient run artifacts, not configuration.
+# Gemfile.lock is committed on purpose (reproducible CI runs).
 App/fastlane/report.xml
 App/fastlane/Preview.html
 App/fastlane/screenshots/

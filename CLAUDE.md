@@ -2,11 +2,11 @@
 
 @AGENTS.md
 
-Vägledning för Claude Code i `pissmyran/bastion_apple`: Bastion för Apple, SSH-klienten för iOS, iPadOS, macOS och tvOS, byggd med Swift, SwiftNIO SSH, SwiftUI och XcodeGen. De andra plattformarna har egna repon: [Bastion för Linux](https://github.com/pissmyran/bastion_linux), [Bastion för Windows](https://github.com/pissmyran/bastion_windows), [Bastion för Android](https://github.com/pissmyran/bastion_android).
+Guidance for Claude Code in `pissmyran/bastion_apple`: Bastion for Apple, the SSH client for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/pissmyran/bastion_linux), [Bastion for Windows](https://github.com/pissmyran/bastion_windows), [Bastion for Android](https://github.com/pissmyran/bastion_android).
 
-De gemensamma reglerna för alla repon finns i [STYRNING.md](https://github.com/pissmyran/.github/blob/main/STYRNING.md) i `pissmyran/.github`. Kärnreglerna nedan är en ordagrann kopia. Jämför versionen i markeringen med källan i början av varje session (`curl -sS https://raw.githubusercontent.com/pissmyran/.github/main/STYRNING.md`); är kopian äldre, uppdatera den först i en egen PR (`docs: sync core rules from .github`).
+The shared rules for all repos live in [STYRNING.md](https://github.com/pissmyran/.github/blob/main/STYRNING.md) in `pissmyran/.github`. The core rules below are a verbatim copy and stay in Swedish, because the copy is compared character by character with the source. Compare the version in the marker with the source at the start of every session (`curl -sS https://raw.githubusercontent.com/pissmyran/.github/main/STYRNING.md`); if the copy is older, update it first in a separate PR (`docs: sync core rules from .github`).
 
-## Kärnregler
+## Core rules
 
 <!-- kärnregler:start version=2026-10-28 källa=https://github.com/pissmyran/.github/blob/main/STYRNING.md -->
 1. **Inga personliga värden.** Repot är publikt. Skriv aldrig in riktiga id:n, domäner, e-postadresser, namn, nycklar, betallänkar eller kontouppgifter i kod, konfiguration, tester, dokumentation eller commit-meddelanden. Använd platshållare och `example.com`-värden.
@@ -26,50 +26,51 @@ De gemensamma reglerna för alla repon finns i [STYRNING.md](https://github.com/
 15. **GitHub bara via REST.** `gh pr` och `gh issue` fungerar inte i molnsessioner (GraphQL är avstängt). Använd `gh api` och de särskilda `ccr`-vägarna; se avsnittet GitHub från sessionen.
 <!-- kärnregler:slut -->
 
-## Kommandon
+## Commands
 
-Bygg och testa Swift-paketet (fungerar på Linux och macOS):
+Build and test the Swift package (works on Linux and macOS):
 
 ```bash
 swift build && swift test
 ```
 
-Generera Xcode-projektet (bara på macOS):
+Generate the Xcode project (macOS only):
 
 ```bash
 sh App/generate-project.sh
 ```
 
-Apparna byggs med Xcode på macOS. Targets: `Bastion` (iOS och iPadOS), `Bastion-macOS` och `Bastion-tvOS`. Kör alltid `App/generate-project.sh`, aldrig `xcodegen` direkt: skriptet läser beroendeversionerna i `App/Package.swift` och skickar dem vidare.
+The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Bastion-macOS` and `Bastion-tvOS`. Always run `App/generate-project.sh`, never `xcodegen` directly: the script reads the dependency versions in `App/Package.swift` and passes them on.
 
-## Regler för det här repot
+## Rules for this repo
 
-- **Ingen signering i repot:** lägg aldrig till kodsignering, certifikat, provisioneringsprofiler eller App Store-nycklar.
-- **SSHCore är källan till synkformatet.** Ändras `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` eller fixturerna i `Tests/fixtures/`, följ stegen i `docs/synkformat.md`.
-- **Projektgenerering** går alltid via `App/generate-project.sh`, och `App/Package.swift` får aldrig bli appens källkod.
-- **Apparna kan inte byggas på Linux.** Bygg och testa Swift-paketet lokalt och skriv i PR:en att apparna inte kunde byggas.
-- **Dokumentationen** är en Zensical-sajt: `docs/`, `zensical.toml` och startsidans mall i `overrides/home.html`. Bygg den lokalt med `pip install --upgrade zensical` och `zensical build --strict`. Nya sidor läggs in i `nav` i `zensical.toml`.
-- **Releasen** styrs av PR-titlarna och kontrollerna i `.github/release-required-checks`; se `docs/release.md`.
+- **Language:** everything in this repo is English: code, comments, docstrings, documentation, PR titles and bodies, commit messages, review replies and labels. Only the core rules block above stays in Swedish. Older code still has Swedish comments and UI text; write every new or changed comment and string in English.
+- **No signing in the repo:** never add code signing, certificates, provisioning profiles or App Store keys.
+- **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow the steps in `docs/sync-format.md`.
+- **Project generation** always goes through `App/generate-project.sh`, and `App/Package.swift` must never become app source.
+- **The apps cannot be built on Linux.** Build and test the Swift package locally and say in the PR that the apps could not be built.
+- **The documentation** is a Zensical site: `docs/`, `zensical.toml` and the home page template in `overrides/home.html`. Build it locally with `pip install --upgrade zensical` and `zensical build --strict`. New pages go into `nav` in `zensical.toml`.
+- **The release** is driven by the PR titles and the checks in `.github/release-required-checks`; see `docs/release.md`.
 
-## Granskning i det här repot
+## Review in this repo
 
-- **Grind:** `main` kräver PR, signerade commits, linjär historik, lösta granskningstrådar och CodeQL utan fel eller allvarliga larm. Inga andra kontroller krävs, men de som körs ska vara gröna. De lokala testerna i Kommandon är testgrinden.
-- **CodeRabbit:** ärver den centrala konfigurationen i `pissmyran/coderabbit`. Repots `.coderabbit.yaml` pekar ut riskområden med egna granskningsinstruktioner; läs den del som gäller filerna du ändrar innan du börjar.
-- **Sourcery och Codex:** granskar också, som GitHub-appar utan egen konfiguration här, och de granskar även dokumentation. Behandla deras trådar som CodeRabbits.
-- **Extra noggrant:** värdnyckelkontroll, sessioners livstid, synkformat och kryptering, OAuth och projektgenereringen i `App/`.
+- **Gate:** `main` requires a PR, signed commits, linear history, resolved review threads and CodeQL without errors or serious alerts. No other checks are required, but the ones that run must be green. The local tests under Commands are the test gate.
+- **CodeRabbit:** inherits the central configuration in `pissmyran/coderabbit`. The repo's `.coderabbit.yaml` points out risk areas with their own review instructions; read the part for the files you change before you start.
+- **Sourcery and Codex:** also review, as GitHub apps without their own configuration here, and they review documentation too. Treat their threads like CodeRabbit's.
+- **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
-## GitHub från sessionen
+## GitHub from a session
 
-GraphQL är avstängt, så `gh pr` och `gh issue` fungerar inte. Använd REST:
+GraphQL is disabled, so `gh pr` and `gh issue` do not work. Use REST:
 
-- Öppna PR: `gh api repos/pissmyran/bastion_apple/pulls -f base=main -f head=<gren> -f title='…' -f body='…'`
-- PR från gren: `gh api 'repos/pissmyran/bastion_apple/pulls?head=pissmyran:<gren>&state=open'`
-- Issue: `gh api repos/pissmyran/bastion_apple/issues/<n>` och `…/issues/<n>/comments`
-- Granskningstrådar: `gh api repos/pissmyran/bastion_apple/pulls/<n>/ccr/review_threads`
-- Svara i tråd: `gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='…'`
-- Lös tråd: `gh api -X POST repos/pissmyran/bastion_apple/pulls/<n>/ccr/comments/<id>/resolve`
-- Kontroller: `gh api repos/pissmyran/bastion_apple/commits/<sha>/check-runs`
-- Auto-merge på: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/ccr/auto_merge -f merge_method=squash`
-- Är PR:en redan klar att mergas (auto-merge vägras då), squash-merga direkt: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/merge -f merge_method=squash`
-- Stäng PR: `gh api -X PATCH repos/pissmyran/bastion_apple/pulls/<n> -f state=closed`
-- Radera gren: GitHub raderar grenen vid merge. En stängd PR:s gren raderas med `git push origin --delete <gren>` (API-vägen är spärrad).
+- Open a PR: `gh api repos/pissmyran/bastion_apple/pulls -f base=main -f head=<branch> -f title='…' -f body='…'`
+- PR from a branch: `gh api 'repos/pissmyran/bastion_apple/pulls?head=pissmyran:<branch>&state=open'`
+- Issue: `gh api repos/pissmyran/bastion_apple/issues/<n>` and `…/issues/<n>/comments`
+- Review threads: `gh api repos/pissmyran/bastion_apple/pulls/<n>/ccr/review_threads`
+- Reply in a thread: `gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='…'`
+- Resolve a thread: `gh api -X POST repos/pissmyran/bastion_apple/pulls/<n>/ccr/comments/<id>/resolve`
+- Checks: `gh api repos/pissmyran/bastion_apple/commits/<sha>/check-runs`
+- Enable auto-merge: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/ccr/auto_merge -f merge_method=squash`
+- If the PR is already mergeable (auto-merge is then refused), squash-merge directly: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/merge -f merge_method=squash`
+- Close a PR: `gh api -X PATCH repos/pissmyran/bastion_apple/pulls/<n> -f state=closed`
+- Delete a branch: GitHub deletes the branch on merge. A closed PR's branch is deleted with `git push origin --delete <branch>` (the API route is blocked).

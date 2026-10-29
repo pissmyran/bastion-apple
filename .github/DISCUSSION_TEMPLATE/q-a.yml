@@ -1,29 +1,29 @@
-title: "[Fråga] "
+title: "[Question] "
 body:
   - type: markdown
     attributes:
       value: |
-        Använd den här kategorin för frågor om Bastion, arbetssätt eller dokumentation.
+        Use this category for questions about Bastion, how it works or its documentation.
 
-        För reproducerbara fel eller konkreta förbättringsförslag ska du använda Issues i det berörda repositoryt. Rapportera aldrig säkerhetsbrister eller hemligheter här.
+        For reproducible bugs or concrete feature requests, use Issues in the affected repository. Never report security vulnerabilities or secrets here.
   - type: checkboxes
     id: safety
     attributes:
-      label: Kontroll
+      label: Check
       options:
-        - label: Inlägget innehåller inga hemligheter, personuppgifter eller sårbarhetsdetaljer.
+        - label: The post contains no secrets, personal data or vulnerability details.
           required: true
   - type: textarea
     id: question
     attributes:
-      label: Fråga
-      description: Vad vill du ha hjälp att förstå eller reda ut?
+      label: Question
+      description: What do you want help understanding or sorting out?
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
-      label: Kontext
-      description: Beskriv vilket projekt eller sammanhang frågan gäller och vad du redan har provat.
+      label: Context
+      description: Which project or situation the question is about, and what you have already tried.
     validations:
       required: true
