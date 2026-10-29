@@ -4,27 +4,34 @@
 
 Guidance for Claude Code in `pissmyran/bastion_apple`: Bastion for Apple, the SSH client for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/pissmyran/bastion_linux), [Bastion for Windows](https://github.com/pissmyran/bastion_windows), [Bastion for Android](https://github.com/pissmyran/bastion_android).
 
-The shared rules for all repos live in [STYRNING.md](https://github.com/pissmyran/.github/blob/main/STYRNING.md) in `pissmyran/.github`. The core rules below are a verbatim copy and stay in Swedish, because the copy is compared character by character with the source. Compare the version in the marker with the source at the start of every session (`curl -sS https://raw.githubusercontent.com/pissmyran/.github/main/STYRNING.md`); if the copy is older, update it first in a separate PR (`docs: sync core rules from .github`).
+The shared rules for all repos live in [GOVERNANCE.md](https://github.com/pissmyran/.github/blob/main/GOVERNANCE.md) in `pissmyran/.github`. The core rules below are a verbatim copy. At the start of every session, compare the version in the marker with the source:
+
+```sh
+curl -fsS https://raw.githubusercontent.com/pissmyran/.github/main/GOVERNANCE.md
+```
+
+If the copy is older, update it first in a separate PR (`docs: sync core rules from .github`).
 
 ## Core rules
 
-<!-- kärnregler:start version=2026-10-28 källa=https://github.com/pissmyran/.github/blob/main/STYRNING.md -->
-1. **Inga personliga värden.** Repot är publikt. Skriv aldrig in riktiga id:n, domäner, e-postadresser, namn, nycklar, betallänkar eller kontouppgifter i kod, konfiguration, tester, dokumentation eller commit-meddelanden. Använd platshållare och `example.com`-värden.
-2. **Inga hemligheter.** Tokens, lösenord, sessioner och nycklar hamnar aldrig i Git, loggar, issues eller publik dokumentation. Hemligheter läggs in utanför repot (Cloudflare, GitHub-miljöer, `wrangler secret put`).
-3. **Gren och pull request.** Varje session börjar från senaste `main` (`git fetch origin main`) på en egen gren. `main` ändras bara genom en PR som squash-mergas. Ingen pushar direkt till `main`. En sessions arbete hålls i en PR.
-4. **Testa lokalt före varje push.** Det finns inga testkontroller i CI. Repots egna tester och kontroller (avsnittet Kommandon i repots `CLAUDE.md`) är den enda testgrinden. Pusha aldrig med fallerande tester, och skriv tester för det du ändrar.
-5. **Rör aldrig workflows.** `.github/workflows/`, `.github/actions/` och `CODEOWNERS` ändras inte av Claude, inte ens för att laga ett fel. Ingen kontroll stoppar det längre, men regeln gäller fullt ut. Behövs en ändring: beskriv den i ett issue och låt ägaren göra den. Bara Renovate och Dependabot får uppdatera dem.
-6. **Granskning.** CodeRabbit, Sourcery och Codex granskar, och CodeQL (GitHubs standardinställning) skannar. Varje granskningstråd måste lösas innan merge. Svara i tråden med vad du ändrade, eller med skälet om fyndet är brus.
-7. **Auto-merge sist.** Slå på auto-merge först när granskningsbotarna har granskat den senaste commiten (CodeRabbit hoppar över `docs/` och `*.md`; för sådana ändringar räcker Sourcery och Codex), alla trådar är lösta och alla kontroller som körs på PR:en är gröna, även de som reglerna inte kräver (till exempel `Dokumentation`).
-8. **Laga orsaken, inte symptomet.** När något fallerar eller en granskning kräver ändring: läs allt, hitta orsaken och gör om den delen rätt. Små uppenbara fel får rättas direkt. Försvaga aldrig ett test, hoppa aldrig över en kontroll och tysta aldrig en varning.
-9. **Säkerhet först.** Säkerhetslarm (CodeQL, Dependabot, Renovate) går före annat arbete. Länka issuet med `Closes #n`.
-10. **Senaste versionerna.** Lägg aldrig till nya låsningar till ett versionsnummer; använd `@latest`, `node`, `latest` och versionsintervall. Befintliga låsningar som Renovate håller aktuella (till exempel `packageManager`, `requirements-docs.txt`, `.node-version`, lockfiler och actions låsta med commit-SHA) behålls och ändras bara av Renovate.
-11. **Commits och titlar.** Sessionen signerar commits själv. Ändra aldrig gits användare, e-post eller signering, och använd aldrig `--no-verify`. PR-titeln blir commiten på `main` och skrivs på engelska enligt Conventional Commits: `typ: beskrivning` eller `typ(område): beskrivning`, med typ feat, fix, docs, refactor, perf, test, build, ci, chore, style eller revert.
-12. **Dokumentation i samma PR.** Ändras beteende, inställningar eller kommandon uppdateras `README.md`, `docs/` och repots `CLAUDE.md` i samma PR.
-13. **Inga lösa grenar.** Radera grenen när PR:en är mergad eller stängd. PR:er från forkar är förslag: gör ändringen själv på en egen gren om den är önskad, och stäng originalet med tack och länk.
-14. **Noll kronor.** Slå aldrig på något som kan kosta pengar.
-15. **GitHub bara via REST.** `gh pr` och `gh issue` fungerar inte i molnsessioner (GraphQL är avstängt). Använd `gh api` och de särskilda `ccr`-vägarna; se avsnittet GitHub från sessionen.
-<!-- kärnregler:slut -->
+<!-- core-rules:start version=2026-10-29 source=https://github.com/pissmyran/.github/blob/main/GOVERNANCE.md -->
+1. **No personal values.** The repository is public. Never write real IDs, domains, email addresses, names, keys, payment links or account details in code, configuration, tests, documentation or commit messages. Use placeholders and `example.com` values.
+2. **No secrets.** Tokens, passwords, sessions and keys never end up in Git, logs, issues or public documentation. Secrets live outside the repository (Cloudflare, GitHub environments, `wrangler secret put`, the sandbox proxy).
+3. **Stay in scope.** Work only in the repositories you were assigned. Never ask for broader token permissions. If a task needs more, describe it in an issue and let the owner decide.
+4. **Branch and pull request.** Every session starts from the latest `main` (`git fetch origin main`) on its own branch. `main` changes only through a squash-merged pull request. Nobody pushes directly to `main`. One session's work stays in one pull request.
+5. **Test locally before every push.** CI runs no test checks. The repository's own tests and checks (the Commands section of its `CLAUDE.md`) are the only test gate. Never push with failing tests, and write tests for what you change.
+6. **Never touch workflows.** Do not change `.github/workflows/`, `.github/actions/` or `CODEOWNERS`, not even to fix an error. The token has no Workflows permission, so such a push is rejected. If a change is needed, describe it in an issue and let the owner make it. Only Renovate and Dependabot update them.
+7. **Review.** CodeRabbit, Sourcery and Codex review, and CodeQL (GitHub default setup) scans. Resolve every review thread before merge. Reply in the thread with what you changed, or with the reason if the finding is noise.
+8. **Auto-merge last.** Enable auto-merge only when the review bots have reviewed the latest commit (CodeRabbit skips `docs/` and `*.md`; for those changes Sourcery and Codex are enough), all threads are resolved and every check that runs on the pull request is green, including checks the rules do not require.
+9. **Fix the cause, not the symptom.** When something fails or a review asks for a change: read everything, find the cause and redo that part properly. Small obvious errors may be fixed directly. Never weaken a test, skip a check or silence a warning.
+10. **Security first.** Security alerts (CodeQL, Dependabot, secret scanning, Renovate) come before other work. Open an issue for each alert and link it from the fix with `Closes #n`. Never copy a secret value into an issue. If an alert would expose an exploitable weakness or a live secret, use a private draft security advisory instead of a public issue.
+11. **Latest versions.** Never add new pins to a version number; use `@latest`, `node`, `latest` and version ranges. Existing pins that Renovate keeps current (for example `packageManager`, `requirements-docs.txt`, `.node-version`, lockfiles and actions pinned to a commit SHA) stay, and only Renovate changes them.
+12. **Commits and titles.** Commit with the git identity the sandbox provides. Never change git's user, email or signing, and never use `--no-verify`. The pull request title becomes the commit on `main` and follows Conventional Commits in English: `type: description` or `type(scope): description`, with type feat, fix, docs, refactor, perf, test, build, ci, chore, style or revert.
+13. **Documentation in the same pull request.** When behaviour, settings or commands change, update `README.md`, `docs/` and the repository's `CLAUDE.md` in the same pull request.
+14. **No stray branches.** Delete the branch when the pull request is merged or closed. Pull requests from forks are suggestions: make the change yourself on your own branch if it is wanted, and close the original with thanks and a link.
+15. **Zero cost.** Never enable anything that can cost money.
+16. **Model before task.** Before every new task, state which model fits it best and that it must be activated before work starts. Switching is not automatic. Do not start the task until the owner has confirmed or switched.
+<!-- core-rules:end -->
 
 ## Commands
 
@@ -44,7 +51,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 
 ## Rules for this repo
 
-- **Language:** everything in this repo is English: code, comments, docstrings, documentation, PR titles and bodies, commit messages, review replies and labels. Only the core rules block above stays in Swedish. Older code still has Swedish comments and UI text; write every new or changed comment and string in English.
+- **Language:** everything in this repo is English: code, comments, docstrings, documentation, PR titles and bodies, commit messages, review replies and labels. Older code still has Swedish comments and UI text; write every new or changed comment and string in English.
 - **No signing in the repo:** never add code signing, certificates, provisioning profiles or App Store keys.
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow the steps in `docs/sync-format.md`.
 - **Project generation** always goes through `App/generate-project.sh`, and `App/Package.swift` must never become app source.
@@ -67,18 +74,72 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Local changes:** `optimize.sh` differs from the skill's original in two places: it never writes command text to the log, and it replaces control characters and caps field length in `log_line`. The hook command starts from `$CLAUDE_PROJECT_DIR`. Reapply these if the script is updated from the skill.
 - **Changing it:** switch `mode` to `redirect` only after `.token-optimizer/probe/run-probe.sh` has verified delegation. Set `enabled: false` to turn it off.
 
-## GitHub from a session
+## GitHub from the sandbox
 
-GraphQL is disabled, so `gh pr` and `gh issue` do not work. Use REST:
+The sandbox injects the agent's fine-grained token for `github.com` and `api.github.com`, so `git` and `gh` work as usual. The token reaches only this agent's repositories.
 
-- Open a PR: `gh api repos/pissmyran/bastion_apple/pulls -f base=main -f head=<branch> -f title='…' -f body='…'`
-- PR from a branch: `gh api 'repos/pissmyran/bastion_apple/pulls?head=pissmyran:<branch>&state=open'`
-- Issue: `gh api repos/pissmyran/bastion_apple/issues/<n>` and `…/issues/<n>/comments`
-- Review threads: `gh api repos/pissmyran/bastion_apple/pulls/<n>/ccr/review_threads`
-- Reply in a thread: `gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='…'`
-- Resolve a thread: `gh api -X POST repos/pissmyran/bastion_apple/pulls/<n>/ccr/comments/<id>/resolve`
-- Checks: `gh api repos/pissmyran/bastion_apple/commits/<sha>/check-runs`
-- Enable auto-merge: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/ccr/auto_merge -f merge_method=squash`
-- If the PR is already mergeable (auto-merge is then refused), squash-merge directly: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/merge -f merge_method=squash`
-- Close a PR: `gh api -X PATCH repos/pissmyran/bastion_apple/pulls/<n> -f state=closed`
-- Delete a branch: GitHub deletes the branch on merge. A closed PR's branch is deleted with `git push origin --delete <branch>` (the API route is blocked).
+Open a pull request:
+
+```sh
+gh pr create --base main --title '<title>' --body '<body>'
+```
+
+Show the checks on a pull request:
+
+```sh
+gh pr checks <n>
+```
+
+List the inline review comments (each `id` is used for replies):
+
+```sh
+gh api repos/pissmyran/bastion_apple/pulls/<n>/comments
+```
+
+Reply to a review comment:
+
+```sh
+gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='<reply>'
+```
+
+List the review threads with their node IDs (`id`) and first comment:
+
+```sh
+gh api graphql -f query='query { repository(owner: "pissmyran", name: "bastion_apple") { pullRequest(number: <n>) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { databaseId body } } } } } } }'
+```
+
+Resolve a review thread, using the thread's node ID, not the comment ID:
+
+```sh
+gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f id='<thread-id>'
+```
+
+Enable auto-merge and delete the branch after merge:
+
+```sh
+gh pr merge <n> --auto --squash --delete-branch
+```
+
+Close a pull request and delete its branch:
+
+```sh
+gh pr close <n> --delete-branch
+```
+
+List Dependabot alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/dependabot/alerts
+```
+
+List code scanning alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/code-scanning/alerts
+```
+
+List secret scanning alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/secret-scanning/alerts
+```
