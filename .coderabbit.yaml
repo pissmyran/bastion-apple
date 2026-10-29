@@ -4,161 +4,156 @@ inheritance: true
 
 reviews:
   path_instructions:
-    # SSH-tillit och autentisering.
+    # SSH trust and authentication.
     - path: "Sources/SSHCore/{HostKeyValidator,KnownHosts,SSHUserAuth,SSHSession}.swift"
       instructions: |
-        När värdnyckelkontroll eller autentisering ändras, kontrollera
-        att TOFU fortfarande skiljer första anslutningen från en ändrad
-        nyckel för samma värd och port. En ändrad nyckel ska avvisas.
-        Kontrollera även separata kommandon, SFTP och varje ProxyJump-led
-        där dessa anslutningsvägar finns.
-        På Android ska läs-, tolknings- och skrivfel i known_hosts
-        avvisa anslutningen, inte aktivera AcceptAllServerKeyVerifier.
-        Vid ändrad agentvidarebefordran, kontrollera att användarens
-        uttryckliga forwardAgent-val fortfarande styr åtkomsten.
+        When host key verification or authentication changes, check
+        that TOFU still distinguishes the first connection from a changed
+        key for the same host and port. A changed key must be rejected.
+        Also check separate commands, SFTP and every ProxyJump hop
+        where those connection paths exist.
+        When agent forwarding changes, check that the user's
+        explicit forwardAgent choice still controls access.
 
-    # Samtidighet och anslutningars livstid.
+    # Concurrency and connection lifetime.
     - path: "{Sources/SSHCore/{SSHSession,SSHShell,SFTPClient}.swift,App/{ChainConnector,TerminalView}.swift,App/TVApp/ChainConnector.swift}"
       instructions: |
-        När anslutning, keepalive eller stängning ändras, följ samtidiga
-        connect-, kanalöppnings- och close-förlopp samt autentiseringsfel.
-        Kontrollera att promises och continuations fullbordas högst
-        en gång och att fel eller stängning inte lämnar anrop väntande.
-        Kontrollera att sent färdiga anslutningar och kanaler stängs
-        om anroparen redan har avbrutit.
-        En gammal keepalive-monitor får inte stänga en ny session.
-        Använd TerminalTeardownRaceTests, AuthFailureTerminationTests
-        och respektive plattforms sessionstester som regressionsunderlag.
+        When connect, keepalive or close changes, trace concurrent
+        connect, channel-open and close sequences and auth failures.
+        Check that promises and continuations complete at most
+        once and that errors or close never leave calls pending.
+        Check that late connections and channels are closed
+        if the caller has already cancelled.
+        An old keepalive monitor must not close a new session.
+        Use TerminalTeardownRaceTests and AuthFailureTerminationTests
+        as regression evidence.
 
-    # Beständigt format och sammanslagning.
+    # Persistent format and merging.
     - path: "{Sources/SSHCore/{Host,HostStore,Snippet,SnippetStore,SyncEngine}.swift,Tests/fixtures/{host-wire-format,sync-state-wire-format}.json}"
       instructions: |
-        När serialisering eller lagring ändras, jämför fältnamn,
-        UUID-kodning, datumepoken 2001-01-01 och tombstones-formatet
-        med befintliga läsare och wire-format-fixturer.
-        Kontrollera läsning av äldre Host-listor och, där snippets
-        ingår, tillstånd utan snippets-fältet.
-        Kontrollera att merge är idempotent och ordningsoberoende,
-        även vid lika modifiedAt. En minst lika ny tombstone ska
-        vinna över posten. Gemensamma tombstones får inte tappas
-        när hosts och snippets lagras i separata filer.
-        Kontrollera att ändrade skrivvägar bevarar komplett tidigare
-        data vid fel och inte förlorar samtidiga lokala ändringar.
-        Anta inte identiskt funktionsstöd i Windows, Swift och Rust.
-        Ändra inte fixturer enbart för att dölja ett formatbrott.
+        When serialization or storage changes, compare field names,
+        UUID encoding, the 2001-01-01 date epoch and the tombstone format
+        with existing readers and the wire-format fixtures.
+        Check reading of older Host lists and, where snippets
+        are included, state without the snippets field.
+        Check that merge is idempotent and order independent,
+        also with equal modifiedAt. A tombstone at least as new must
+        win over the entry. Shared tombstones must not be dropped
+        when hosts and snippets are stored in separate files.
+        Check that changed write paths keep the complete previous
+        data on failure and do not lose concurrent local changes.
+        Do not assume identical feature support across platforms.
+        Never change fixtures just to hide a format break.
 
-    # Krypterat synkformat.
+    # Encrypted sync format.
     - path: "Sources/SSHCore/SyncCrypto.swift"
       instructions: |
-        När kuvertet eller kryptografin ändras, kontrollera BSYNC1,
-        iterationsfältets big-endian-kodning, salt och ordningen
-        nonce, ciphertext, tag mot de andra implementationerna.
-        Kontrollera PBKDF2-HMAC-SHA256, AES-256-GCM, färskt salt
-        och färsk nonce samt avvisning av manipulerade kuvert.
-        Indatans iterationsantal ska begränsas före nyckelhärledning.
-        Kontrollera kompatibilitet med befintliga krypterade filer
-        och kända testvektorer. Fel lösenfras eller skadad data får
-        inte tolkas som ett tomt tillstånd som sedan skrivs tillbaka.
+        When the envelope or the cryptography changes, check BSYNC1,
+        the big-endian encoding of the iteration field, salt and the order
+        nonce, ciphertext, tag against the other implementations.
+        Check PBKDF2-HMAC-SHA256, AES-256-GCM, a fresh salt
+        and a fresh nonce, and rejection of tampered envelopes.
+        The input iteration count must be bounded before key derivation.
+        Check compatibility with existing encrypted files
+        and known test vectors. A wrong passphrase or corrupt data must
+        never be read as an empty state that is then written back.
 
-    # OAuth och molnsynk.
+    # OAuth and cloud sync.
     - path: "{App/{OAuthAccountManager,OAuthTokenStore,OAuthProviders,DropboxSyncProvider,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift,App/TVApp/{TVDeviceFlowOAuthManager,TVOAuthTokenStore,GoogleDriveSyncProvider,OneDriveSyncProvider}.swift}"
       instructions: |
-        När OAuth-flödet ändras, kontrollera kopplingen mellan PKCE,
-        state, callback och den redirect_uri som används i kodbytet.
-        Vid tokenförnyelse, kontrollera samtidiga anrop för samma
-        provider och att en roterad refresh-token sparas utan att
-        en annan förnyelse skriver tillbaka ett äldre värde.
-        Om svaret saknar refresh-token ska föregående värde bevaras.
-        I tvOS device flow ska avbrott och utgångstid stoppa pollning
-        och tokenlagring. Respektera interval och slow_down.
-        När synktransport ändras, skilj saknad fil från nekad åtkomst,
-        nätverksfel och skadad nyttolast innan någon push utförs.
-        Bevara SyncCrypto-krypteringen i Apples molnleverantörer.
-        Anta inte att Linux WebDAV använder samma krypterade format.
-        WebDAV-credentials får endast skickas över HTTPS eller
-        till den uttryckligen tillåtna loopback-adressen.
-        Kontrollera att feltexter inte exponerar tokens eller råa
-        svarskroppar som kan innehålla credentials.
+        When the OAuth flow changes, check the link between PKCE,
+        state, the callback and the redirect_uri used in the code exchange.
+        On token refresh, check concurrent calls for the same
+        provider and that a rotated refresh token is stored without
+        another refresh writing back an older value.
+        If the response has no refresh token, keep the previous one.
+        In the tvOS device flow, cancellation and expiry must stop polling
+        and token storage. Respect interval and slow_down.
+        When sync transport changes, separate a missing file from denied access,
+        network errors and a corrupt payload before any push.
+        Keep SyncCrypto encryption in the Apple cloud providers.
+        Check that error messages never expose tokens or raw
+        response bodies that may contain credentials.
 
-    # SFTP-protokoll och filhandtag.
+    # SFTP protocol and file handles.
     - path: "Sources/SSHCore/SFTP{Client,Protocol}.swift"
       instructions: |
-        När SFTP-avkodning ändras, kontrollera fragmenterade paket,
-        obetrodda längdfält och antal poster före allokering.
-        När request-hanteringen ändras, kontrollera att varje svar
-        matchar rätt request-id även vid samtidiga operationer.
-        Protokollfel och stängd kanal ska avsluta väntande anrop.
-        Kontrollera att öppnade fil- och kataloghandtag stängs
-        även när läsning, skrivning eller avkodning misslyckas.
+        When SFTP decoding changes, check fragmented packets,
+        untrusted length fields and entry counts before allocation.
+        When request handling changes, check that every response
+        matches the right request id, also with concurrent operations.
+        Protocol errors and a closed channel must end pending calls.
+        Check that opened file and directory handles are closed
+        even when read, write or decode fails.
 
-    # TCP- och SOCKS-vidarebefordran.
+    # TCP and SOCKS forwarding.
     - path: "Sources/SSHCore/{PortForward,SOCKSProxy}.swift"
       instructions: |
-        När bindning ändras, kontrollera att lokala och dynamiska
-        forwards inte oavsiktligt exponeras utanför loopback.
-        Skilj lokal bindning från fjärrbindningens avsedda adress.
-        Vid fjärrport 0 ska tilldelad port användas för registrering
-        och avregistrering. Avvisa inkommande forwarded-tcpip
-        som inte motsvarar en aktiv vidarebefordran.
-        Kontrollera att lyssnare och aktiva bryggor stängs vid fel
-        eller avslut och att SOCKS-svar motsvarar anslutningsresultatet.
+        When binding changes, check that local and dynamic
+        forwards are not accidentally exposed beyond loopback.
+        Separate the local bind from the intended remote bind address.
+        With remote port 0, the assigned port must be used for registration
+        and deregistration. Reject incoming forwarded-tcpip
+        that does not match an active forward.
+        Check that listeners and active bridges close on error
+        or exit, and that SOCKS replies match the connection result.
 
-    # Kommandobyggare för fjärrsystem.
+    # Command builders for remote systems.
     - path: "Sources/SSHCore/{ArchiveOperations,KeyManagement,DockerService,ProcessRunner}.swift"
       instructions: |
-        När filnamn, nycklar eller Docker-referenser når ett kommando,
-        kontrollera rätt citering för det faktiska skalet samt skydd
-        mot både shell-injektion och flagginjektion.
-        Skilj containernamn från image-referenser med registry,
-        tagg eller digest. Valideringen får inte förväxla formaten.
-        Vid nyckeldeploy ska befintliga authorized_keys bevaras.
-        Kontrollera idempotens och verifiering med den nya nyckeln.
-        När ProcessRunner ändras, kontrollera samtidig dränering
-        av stdout och stderr så fulla pipebuffertar inte låser processen.
+        When file names, keys or Docker references reach a command,
+        check correct quoting for the actual shell and protection
+        against both shell injection and flag injection.
+        Separate container names from image references with a registry,
+        tag or digest. Validation must not confuse the formats.
+        On key deploy, existing authorized_keys must be kept.
+        Check idempotence and verification with the new key.
+        When the process runner changes, check concurrent draining
+        of stdout and stderr so full pipe buffers never block the process.
 
-    # Hämtning av körbara verktyg.
+    # Fetching executable tools.
     - path: "Sources/SSHCore/ExternalBinaryFetcher.swift"
       instructions: |
-        När hämtning eller cache ändras, kontrollera att både hämtade
-        och återanvända bytes verifieras mot förväntad SHA256 innan
-        de lämnas ut som en giltig körbar fil.
-        Vid arkivhämtning, skilj arkivets checksumma från den
-        extraherade binärens checksumma.
-        Kontrollera valt OS, arkitektur och arkivmedlem samt att
-        obetrodda namn inte kan skriva utanför cachekatalogen.
-        En felaktig cachepost får inte köras som reserv vid nätverksfel.
+        When fetching or caching changes, check that both downloaded
+        and reused bytes are verified against the expected SHA256 before
+        they are handed out as a valid executable.
+        For archive downloads, separate the archive checksum from the
+        checksum of the extracted binary.
+        Check the selected OS, architecture and archive member, and that
+        untrusted names cannot write outside the cache directory.
+        A bad cache entry must never run as a fallback on network errors.
 
-    # S3-kompatibla tjänster.
+    # S3-compatible services.
     - path: "Sources/SSHCore/S3Client.swift"
       instructions: |
-        När SigV4 eller URL-bygge ändras, jämför canonical request
-        med den URL, Host-header, frågesträng och payload som skickas.
-        Kontrollera icke-standardportar, specialtecken i objektnycklar,
-        sorterade query-parametrar och befintligt path-style-stöd.
-        Kontrollera signaturvektorer och att HTTP-fel inte rapporteras
-        som lyckade objektoperationer.
+        When SigV4 or URL building changes, compare the canonical request
+        with the URL, Host header, query string and payload that are sent.
+        Check non-standard ports, special characters in object keys,
+        sorted query parameters and existing path-style support.
+        Check signature vectors and that HTTP errors are never reported
+        as successful object operations.
 
-    # Apple-projektets beroende- och targetgränser.
+    # Apple project dependency and target boundaries.
     - path: "App/{Package.swift,project.yml,project.dependencies.yml,generate-project.sh}"
       instructions: |
-        När SwiftTerm-version eller projektgenerering ändras,
-        kontrollera kedjan App/Package.swift, SWIFTTERM_VERSION,
-        project.dependencies.yml och generate-project.sh.
-        Kontrollera att App/Package.swift inte blir vanlig app-source
-        och att tvOS-targeten inte oavsiktligt får SwiftTerm eller
-        iOS/macOS-filer som använder otillgängliga API:er.
-        Bevara apparnas användning av SSHCore från rotpaketet.
+        When the SwiftTerm version or project generation changes,
+        check the chain App/Package.swift, SWIFTTERM_VERSION,
+        project.dependencies.yml and generate-project.sh.
+        Check that App/Package.swift never becomes regular app source
+        and that the tvOS target does not accidentally get SwiftTerm or
+        iOS/macOS files that use unavailable APIs.
+        Keep the apps using SSHCore from the root package.
 
-    # Publicering av versioner.
+    # Publishing releases.
     - path: ".github/{workflows/release.yml,scripts/semantic_release.py,scripts/wait_for_checks.py,release-baseline,release-required-checks}"
       instructions: |
-        När releasebeslut eller kontrollgrind ändras, kontrollera
-        att tagg, kontroller och publicering avser samma target_sha.
-        Saknade, väntande eller misslyckade obligatoriska kontroller
-        får inte räknas som godkända. Kontrollera paginering och
-        senaste resultat per kontroll och utfärdare vid omkörningar.
-        Vid samtidiga releaser eller omförsök, kontrollera att en
-        befintlig taggs mål verifieras och att samma release inte
-        publiceras på nytt med annat innehåll.
-        Kontrollera stabila versioner, rc och promote mot parsern
-        och befintliga releaseankare utan att kringgå kontrollgrinden.
+        When release decisions or the check gate change, check
+        that the tag, the checks and the publication refer to the same target_sha.
+        Missing, pending or failed required checks must never
+        count as passed. Check pagination and the latest
+        result per check and issuer on reruns.
+        On concurrent releases or retries, check that an
+        existing tag's target is verified and that the same release is not
+        published again with different content.
+        Check stable versions, rc and promote against the parser
+        and existing release anchors without bypassing the check gate.

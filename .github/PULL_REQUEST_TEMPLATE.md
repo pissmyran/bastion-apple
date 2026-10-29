@@ -1,23 +1,23 @@
-## Sammanfattning
+## Summary
 
-Beskriv kort vad den här pull requesten ändrar och varför.
+Briefly describe what this pull request changes and why.
 
-## Relaterat ärende
+## Related issue
 
-Länka relevant issue eller discussion om det finns.
+Link the relevant issue or discussion, if any.
 
-## Test och verifiering
+## Testing and verification
 
-Beskriv hur ändringen har testats eller verifierats. Ange även om inga tester varit relevanta.
+Describe how the change was tested or verified. Say so if no tests were relevant.
 
-## Dokumentation
+## Documentation
 
-Beskriv eventuell dokumentationsändring eller varför ingen dokumentationsändring behövs.
+Describe any documentation change, or why none is needed.
 
-## Kontroll före merge
+## Before merge
 
-- [ ] Ändringen är avgränsad och innehåller endast relevanta ändringar.
-- [ ] Tester och relevanta kontroller har körts eller bedömts som ej tillämpliga.
-- [ ] Dokumentation har uppdaterats när det behövs.
-- [ ] Pull requesten innehåller inga lösenord, tokens, privata nycklar, personuppgifter eller andra känsliga uppgifter.
-- [ ] Säkerhetsproblem har inte beskrivits offentligt; sådana rapporteras enligt `SECURITY.md`.
+- [ ] The change is scoped and contains only relevant changes.
+- [ ] Tests and relevant checks have been run or judged not applicable.
+- [ ] Documentation has been updated where needed.
+- [ ] The pull request contains no passwords, tokens, private keys, personal data or other sensitive data.
+- [ ] Security problems have not been described publicly; they are reported according to `SECURITY.md`.

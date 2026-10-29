@@ -1,53 +1,54 @@
-name: Felrapport
-description: Rapportera ett reproducerbart problem.
+name: Bug report
+description: Report a reproducible problem.
 title: "[Bug]: "
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Tack för att du hjälper till att förbättra projektet.
-        Rapportera inte säkerhetsbrister här och lägg aldrig in lösenord, tokens, privata nycklar eller andra känsliga uppgifter i ett publikt issue.
+        Thanks for helping improve the project.
+        Do not report security vulnerabilities here, and never include passwords, tokens, private keys or other sensitive data in a public issue.
   - type: checkboxes
     id: checks
     attributes:
-      label: Kontroll före rapportering
+      label: Before reporting
       options:
-        - label: Jag har sökt efter ett befintligt issue med samma problem.
+        - label: I have searched for an existing issue about the same problem.
           required: true
-        - label: Rapporten innehåller inga hemligheter eller andra känsliga uppgifter.
+        - label: The report contains no secrets or other sensitive data.
           required: true
   - type: textarea
     id: problem
     attributes:
-      label: Vad hände?
-      description: Beskriv felet så konkret som möjligt.
+      label: What happened?
+      description: Describe the problem as concretely as possible.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Steg för att återskapa
-      description: Ange den minsta tillförlitliga sekvens som återskapar problemet.
+      label: Steps to reproduce
+      description: The shortest reliable sequence that reproduces the problem.
       placeholder: |
-        1. Öppna ...
-        2. Välj ...
-        3. Observera ...
+        1. Open ...
+        2. Select ...
+        3. See ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Förväntat beteende
-      description: Beskriv vad du förväntade dig skulle hända.
+      label: Expected behavior
+      description: What did you expect to happen?
     validations:
       required: true
   - type: input
     id: environment
     attributes:
-      label: Miljö
-      description: Exempelvis operativsystem, webbläsare, runtime eller versionsnummer.
+      label: Environment
+      description: For example operating system, device, app version.
   - type: textarea
     id: details
     attributes:
-      label: Loggar, skärmbilder eller annan information
-      description: Ta bort personuppgifter och känslig information innan du bifogar något.
+      label: Logs, screenshots or other details
+      description: Remove personal and sensitive data before attaching anything.

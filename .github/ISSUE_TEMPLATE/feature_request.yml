@@ -1,38 +1,39 @@
-name: Förslag
-description: Föreslå en förbättring eller ny funktion.
+name: Feature request
+description: Suggest an improvement or a new feature.
 title: "[Feature]: "
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
-      value: Beskriv behovet först och lösningen därefter. Undvik känsliga eller privata uppgifter.
+      value: Describe the need first and the solution second. Avoid sensitive or private data.
   - type: checkboxes
     id: checks
     attributes:
-      label: Kontroll före förslaget
+      label: Before suggesting
       options:
-        - label: Jag har sökt efter ett befintligt issue med samma eller liknande förslag.
+        - label: I have searched for an existing issue with the same or a similar suggestion.
           required: true
   - type: textarea
     id: problem
     attributes:
-      label: Problem eller behov
-      description: Vilket problem försöker du lösa, eller vilket behov finns?
+      label: Problem or need
+      description: Which problem are you trying to solve, or which need is there?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Föreslagen lösning
-      description: Beskriv önskat beteende eller resultat.
+      label: Proposed solution
+      description: Describe the behavior or result you want.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternativ
-      description: Beskriv andra lösningar eller arbetssätt som du har övervägt.
+      label: Alternatives
+      description: Other solutions or workflows you have considered.
   - type: textarea
     id: context
     attributes:
-      label: Övrig kontext
-      description: Lägg till relevanta exempel eller skärmbilder utan känslig information.
+      label: Additional context
+      description: Relevant examples or screenshots without sensitive data.
