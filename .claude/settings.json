@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && .token-optimizer/optimize.sh --mode=hook --platform=claude"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -59,6 +59,14 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Sourcery and Codex:** also review, as GitHub apps without their own configuration here, and they review documentation too. Treat their threads like CodeRabbit's.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
+## Token optimizer
+
+- **What it is:** the platform-skills token optimizer runs in audit mode. `.token-optimizer.yaml` holds the settings, `.token-optimizer/optimize.sh` is the hook script and `.claude/agents/platform-bulk-reader.md` is the cheap reader agent.
+- **What it does:** a `PreToolUse` hook in `.claude/settings.json` logs oversized reads, and shell calls it cannot classify, to `.token-optimizer/decisions.log` (git-ignored). The log never holds command text. The hook never blocks a read.
+- **Requirements:** `jq` and mikefarah `yq` v4 (the Python `yq` does not work). Create the git-ignored state directory once with `mkdir -p .token-optimizer/state`.
+- **Local changes:** `optimize.sh` differs from the skill's original in two places: it never writes command text to the log, and it replaces control characters and caps field length in `log_line`. The hook command starts from `$CLAUDE_PROJECT_DIR`. Reapply these if the script is updated from the skill.
+- **Changing it:** switch `mode` to `redirect` only after `.token-optimizer/probe/run-probe.sh` has verified delegation. Set `enabled: false` to turn it off.
+
 ## GitHub from a session
 
 GraphQL is disabled, so `gh pr` and `gh issue` do not work. Use REST:
