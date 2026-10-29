@@ -1,0 +1,4 @@
+f3676fc7a4502b1b35d211c72140a3af0e395aa5e603c1a1232ce2fdf7ccd003  .token-optimizer.yaml
+458f6e29b2526879826368b503e6a7b8c680b4361317db359654828df2786138  .token-optimizer/optimize.sh
+84dd5bcfd5284a06a5cba308ff357c005fa3a061629d28093c681752344b8316  .token-optimizer/probe/run-probe.sh
+13df1a012b5ad46e13c29d991db31b1fdd490f806fc520b8e4f4360150ade5b1  .claude/agents/platform-bulk-reader.md

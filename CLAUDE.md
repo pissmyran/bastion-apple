@@ -4,7 +4,13 @@
 
 Guidance for Claude Code in `pissmyran/bastion_apple`: Bastion for Apple, the SSH client for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/pissmyran/bastion_linux), [Bastion for Windows](https://github.com/pissmyran/bastion_windows), [Bastion for Android](https://github.com/pissmyran/bastion_android).
 
-The shared rules for all repos live in [GOVERNANCE.md](https://github.com/pissmyran/.github/blob/main/GOVERNANCE.md) in `pissmyran/.github`. The core rules below are a verbatim copy, compared character by character with the source. Compare the version in the marker with the source at the start of every session (`curl -sS https://raw.githubusercontent.com/pissmyran/.github/main/GOVERNANCE.md`); if the copy is older, update it first in a separate PR (`docs: sync core rules from .github`).
+The shared rules for all repos live in [GOVERNANCE.md](https://github.com/pissmyran/.github/blob/main/GOVERNANCE.md) in `pissmyran/.github`. The core rules below are a verbatim copy. At the start of every session, compare the version in the marker with the source:
+
+```sh
+curl -fsS https://raw.githubusercontent.com/pissmyran/.github/main/GOVERNANCE.md
+```
+
+If the copy is older, update it first in a separate PR (`docs: sync core rules from .github`).
 
 ## Core rules
 
@@ -60,18 +66,80 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Sourcery and Codex:** also review, as GitHub apps without their own configuration here, and they review documentation too. Treat their threads like CodeRabbit's.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
-## GitHub from a session
+## Token optimizer
 
-GraphQL is disabled, so `gh pr` and `gh issue` do not work. Use REST:
+- **What it is:** the platform-skills token optimizer runs in audit mode. `.token-optimizer.yaml` holds the settings, `.token-optimizer/optimize.sh` is the hook script and `.claude/agents/platform-bulk-reader.md` is the cheap reader agent.
+- **What it does:** a `PreToolUse` hook in `.claude/settings.json` logs oversized reads, and shell calls it cannot classify, to `.token-optimizer/decisions.log` (git-ignored). The log never holds command text. The hook never blocks a read.
+- **Requirements:** `jq` and mikefarah `yq` v4 (the Python `yq` does not work). Create the git-ignored state directory once with `mkdir -p .token-optimizer/state`.
+- **Local changes:** `optimize.sh` differs from the skill's original in two places: it never writes command text to the log, and it replaces control characters and caps field length in `log_line`. The hook command starts from `$CLAUDE_PROJECT_DIR`. Reapply these if the script is updated from the skill.
+- **Changing it:** switch `mode` to `redirect` only after `.token-optimizer/probe/run-probe.sh` has verified delegation. Set `enabled: false` to turn it off.
 
-- Open a PR: `gh api repos/pissmyran/bastion_apple/pulls -f base=main -f head=<branch> -f title='…' -f body='…'`
-- PR from a branch: `gh api 'repos/pissmyran/bastion_apple/pulls?head=pissmyran:<branch>&state=open'`
-- Issue: `gh api repos/pissmyran/bastion_apple/issues/<n>` and `…/issues/<n>/comments`
-- Review threads: `gh api repos/pissmyran/bastion_apple/pulls/<n>/ccr/review_threads`
-- Reply in a thread: `gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='…'`
-- Resolve a thread: `gh api -X POST repos/pissmyran/bastion_apple/pulls/<n>/ccr/comments/<id>/resolve`
-- Checks: `gh api repos/pissmyran/bastion_apple/commits/<sha>/check-runs`
-- Enable auto-merge: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/ccr/auto_merge -f merge_method=squash`
-- If the PR is already mergeable (auto-merge is then refused), squash-merge directly: `gh api -X PUT repos/pissmyran/bastion_apple/pulls/<n>/merge -f merge_method=squash`
-- Close a PR: `gh api -X PATCH repos/pissmyran/bastion_apple/pulls/<n> -f state=closed`
-- Delete a branch: GitHub deletes the branch on merge. A closed PR's branch is deleted with `git push origin --delete <branch>` (the API route is blocked).
+## GitHub from the sandbox
+
+The sandbox injects the agent's fine-grained token for `github.com` and `api.github.com`, so `git` and `gh` work as usual. The token reaches only this agent's repositories.
+
+Open a pull request:
+
+```sh
+gh pr create --base main --title '<title>' --body '<body>'
+```
+
+Show the checks on a pull request:
+
+```sh
+gh pr checks <n>
+```
+
+List the inline review comments (each `id` is used for replies):
+
+```sh
+gh api repos/pissmyran/bastion_apple/pulls/<n>/comments
+```
+
+Reply to a review comment:
+
+```sh
+gh api repos/pissmyran/bastion_apple/pulls/<n>/comments/<id>/replies -f body='<reply>'
+```
+
+List the review threads with their node IDs (`id`) and first comment:
+
+```sh
+gh api graphql -f query='query { repository(owner: "pissmyran", name: "bastion_apple") { pullRequest(number: <n>) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { databaseId body } } } } } } }'
+```
+
+Resolve a review thread, using the thread's node ID, not the comment ID:
+
+```sh
+gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f id='<thread-id>'
+```
+
+Enable auto-merge and delete the branch after merge:
+
+```sh
+gh pr merge <n> --auto --squash --delete-branch
+```
+
+Close a pull request and delete its branch:
+
+```sh
+gh pr close <n> --delete-branch
+```
+
+List Dependabot alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/dependabot/alerts
+```
+
+List code scanning alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/code-scanning/alerts
+```
+
+List secret scanning alerts:
+
+```sh
+gh api repos/pissmyran/bastion_apple/secret-scanning/alerts
+```
