@@ -104,9 +104,9 @@ log_line() {
   local dir
   dir="$(dirname "$LOG_FILE")"
   [[ "$LOG_FILE" == "/dev/null" || -d "$dir" ]] || return 0
-  # Local change: flatten control characters and cap the free-text fields, so a
+  # Local change: replace every control character and cap the free-text fields, so a
   # value taken from a payload can never split a record or fill the log.
-  local d3="${3//[$'\t\r\n']/ }" d4="${4//[$'\t\r\n']/ }"
+  local d3="${3//[[:cntrl:]]/ }" d4="${4//[[:cntrl:]]/ }"
   printf '%s\t%s\t%s\t%s\t%s\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${d3:0:200}" "${d4:0:500}" >>"$LOG_FILE" 2>/dev/null || true
   [[ "$LOG_FILE" == "/dev/null" ]] || chmod 600 "$LOG_FILE" 2>/dev/null || true
