@@ -15,7 +15,7 @@ options:
 packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm
-    from: "1.99.1"
+    from: "1.99.2"
   # Kärnan (SSHCore) ligger i repo-roten en nivå upp.
   Bastion:
     path: ..
