@@ -18,5 +18,6 @@ App/vendor/
 site/
 .token-optimizer/decisions.log
 .token-optimizer/state/
-.token-optimizer/probe/
+.token-optimizer/probe/*
+!.token-optimizer/probe/run-probe.sh
 !.token-optimizer/optimize.sh

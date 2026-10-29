@@ -104,8 +104,11 @@ log_line() {
   local dir
   dir="$(dirname "$LOG_FILE")"
   [[ "$LOG_FILE" == "/dev/null" || -d "$dir" ]] || return 0
+  # Local change: flatten control characters and cap the free-text fields, so a
+  # value taken from a payload can never split a record or fill the log.
+  local d3="${3//[$'\t\r\n']/ }" d4="${4//[$'\t\r\n']/ }"
   printf '%s\t%s\t%s\t%s\t%s\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" >>"$LOG_FILE" 2>/dev/null || true
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${d3:0:200}" "${d4:0:500}" >>"$LOG_FILE" 2>/dev/null || true
   [[ "$LOG_FILE" == "/dev/null" ]] || chmod 600 "$LOG_FILE" 2>/dev/null || true
   return 0
 }
@@ -729,12 +732,12 @@ run_hook_mode() {
       if [[ "$CLASS_RESULT" == "oversized" ]]; then
         cumulative_add "$REQ_LINES" "$REQ_BYTES"
         local eff; eff="$(effective_mode)"
-        [[ "$eff" == "audit" || "$eff" == "redirect" ]] && log_line "would_redirect" "shell_full_read" "$P_COMMAND" "$target"
+        [[ "$eff" == "audit" || "$eff" == "redirect" ]] && log_line "would_redirect" "shell_full_read" "-" "$target"
         return 0
       fi
     fi
     local eff; eff="$(effective_mode)"
-    [[ "$eff" == "audit" || "$eff" == "redirect" ]] && log_line "audit" "shell_unparsed" "$P_COMMAND" "-"
+    [[ "$eff" == "audit" || "$eff" == "redirect" ]] && log_line "audit" "shell_unparsed" "-" "-"
     return 0
   fi
 

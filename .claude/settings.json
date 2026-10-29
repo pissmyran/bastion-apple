@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".token-optimizer/optimize.sh --mode=hook --platform=claude"
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && .token-optimizer/optimize.sh --mode=hook --platform=claude"
           }
         ]
       }
