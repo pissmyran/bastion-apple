@@ -44,7 +44,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 
 ## Rules for this repo
 
-- **Language:** everything in this repo is English: code, comments, docstrings, documentation, PR titles and bodies, commit messages, review replies and labels. Only the core rules block above stays in Swedish. Older code still has Swedish comments and UI text; translate them when you touch the file.
+- **Language:** everything in this repo is English: code, comments, docstrings, documentation, PR titles and bodies, commit messages, review replies and labels. Only the core rules block above stays in Swedish. Older code still has Swedish comments and UI text; write every new or changed comment and string in English.
 - **No signing in the repo:** never add code signing, certificates, provisioning profiles or App Store keys.
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow the steps in `docs/sync-format.md`.
 - **Project generation** always goes through `App/generate-project.sh`, and `App/Package.swift` must never become app source.

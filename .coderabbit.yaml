@@ -25,8 +25,8 @@ reviews:
         Check that late connections and channels are closed
         if the caller has already cancelled.
         An old keepalive monitor must not close a new session.
-        Use TerminalTeardownRaceTests and AuthFailureTerminationTests
-        as regression evidence.
+        Use TerminalTeardownRaceTests, AuthFailureTerminationTests and the
+        app and tvOS session tests (ChainConnector) as regression evidence.
 
     # Persistent format and merging.
     - path: "{Sources/SSHCore/{Host,HostStore,Snippet,SnippetStore,SyncEngine}.swift,Tests/fixtures/{host-wire-format,sync-state-wire-format}.json}"

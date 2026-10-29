@@ -6,7 +6,7 @@ This repo holds Bastion for Apple. Changes to the sync format are made in [Basti
 
 ## Reporting
 
-- **Bugs and requests:** open an issue with the matching form.
+- **Bugs and requests:** open an issue with the matching form. The bug form applies the `bug` label and the feature form the `enhancement` label.
 - **Security problems:** follow [SECURITY.md](SECURITY.md). Never publish vulnerability details in an issue, pull request or discussion.
 
 ## Workflow
