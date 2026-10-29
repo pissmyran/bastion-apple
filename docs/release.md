@@ -1,38 +1,38 @@
-# Release
+# Releases
 
-## Versioner
+## Versions
 
-Bastion för Apple har egna versioner, oberoende av de andra plattformarna. Versionen är en SemVer-tagg `vMAJOR.MINOR.PATCH` med en GitHub Release. Plattformens egna versionsfält, till exempel en appbutiks byggnummer, är något annat.
+Bastion for Apple has its own versions, independent of the other platforms. A version is a SemVer tag `vMAJOR.MINOR.PATCH` with a GitHub Release. The platform's own version fields, for example an app store build number, are something else.
 
-## PR-titeln styr versionen
+## The PR title sets the version
 
-PR-titeln blir commiten på `main` och följer Conventional Commits. Releasen räknar fram versionen från titlarna sedan förra releasen:
+The PR title becomes the commit on `main` and follows Conventional Commits. The release computes the version from the titles since the previous release:
 
-| Titel | Ger |
+| Title | Gives |
 | --- | --- |
-| `!` efter typen eller `BREAKING CHANGE:` | major |
+| `!` after the type or `BREAKING CHANGE:` | major |
 | `feat:` | minor |
 | `fix:`, `perf:`, `revert:` | patch |
-| `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:` | ingen release |
+| `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:` | no release |
 
-## Flödet
+## The flow
 
-1. En PR mergas till `main`.
-2. `.github/workflows/release.yml` räknar fram versionen från commitarna sedan senaste tagg, eller sedan commiten i `.github/release-baseline` om ingen tagg finns ännu.
-3. Releasen väntar tills kontrollerna i `.github/release-required-checks` är gröna på samma commit.
-4. Taggen och GitHub Releasen skapas.
-5. Dokumentationen byggs från taggen och publiceras på [GitHub Pages](https://pissmyran.github.io/bastion_apple/).
+1. A PR is merged to `main`.
+2. `.github/workflows/release.yml` computes the version from the commits since the latest tag, or since the commit in `.github/release-baseline` if there is no tag yet.
+3. The release waits until the checks in `.github/release-required-checks` are green on the same commit.
+4. The tag and the GitHub Release are created.
+5. The documentation is built from the tag and published on [GitHub Pages](https://pissmyran.github.io/bastion_apple/).
 
-En merge som bara innehåller till exempel `docs:` släpper ingen ny version, och därför publiceras dokumentationen först vid nästa release.
+A merge that only contains, for example, `docs:` releases no new version, so the documentation is published at the next release.
 
-## Kontroller som krävs
+## Required checks
 
-`.github/release-required-checks` innehåller en kontroll per rad. I dag är det CodeQL-analysen för plattformens språk (`Analyze (swift)`). När ett bygg- och testworkflow finns ska dess kontroll läggas till där.
+`.github/release-required-checks` holds one check per line. Today it is the CodeQL analysis for the platform's language (`Analyze (swift)`). When a build and test workflow exists, its check should be added there.
 
-## Release är inte distribution
+## A release is not distribution
 
-En GitHub Release publicerar ingenting till en appbutik eller pakethanterare. Distribution är ett separat steg.
+A GitHub Release publishes nothing to an app store or package manager. Distribution is a separate step.
 
-## Rätta en felaktig release
+## Fixing a bad release
 
-Taggar flyttas aldrig. Rätta i stället med en vanlig PR (`fix:` eller `revert:`), så skapar nästa release en ny version.
+Tags are never moved. Fix it with a regular PR (`fix:` or `revert:`) instead, and the next release creates a new version.

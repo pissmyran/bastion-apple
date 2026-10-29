@@ -1,7 +1,7 @@
 [project]
-site_name = "Bastion för Apple"
+site_name = "Bastion for Apple"
 site_url = "https://pissmyran.github.io/bastion_apple/"
-site_description = "SSH-klienten för iPhone, iPad, Mac och Apple TV, byggd på den delade Swift-kärnan SSHCore."
+site_description = "The SSH client for iPhone, iPad, Mac and Apple TV, built on the shared Swift core SSHCore."
 repo_url = "https://github.com/pissmyran/bastion_apple"
 repo_name = "pissmyran/bastion_apple"
 edit_uri = "edit/main/docs/"
@@ -9,25 +9,25 @@ docs_dir = "docs"
 site_dir = "site"
 copyright = "Bastion – Apache-2.0"
 nav = [
-  { "Start" = "index.md" },
-  { "Kom igång" = "kom-igang.md" },
-  { "Arkitektur" = "arkitektur.md" },
-  { "Drift och verifiering" = "drift.md" },
-  { "Synkformat" = "synkformat.md" },
-  { "Release" = "release.md" },
-  { "GUI-prototyp" = "prototyp/bastion-gui.html" },
+  { "Home" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Architecture" = "architecture.md" },
+  { "Operations" = "operations.md" },
+  { "Sync format" = "sync-format.md" },
+  { "Releases" = "release.md" },
+  { "GUI prototype" = "prototype/bastion-gui.html" },
 ]
 extra_css = [
   "stylesheets/extra.css",
 ]
 
 [project.extra]
-platform = "iOS, iPadOS, macOS och tvOS"
-tagline = "SSH-klienten för iPhone, iPad, Mac och Apple TV, byggd på den delade Swift-kärnan SSHCore."
+platform = "iOS, iPadOS, macOS and tvOS"
+tagline = "The SSH client for iPhone, iPad, Mac and Apple TV, built on the shared Swift core SSHCore."
 
 [project.theme]
 variant = "modern"
-language = "sv"
+language = "en"
 custom_dir = "overrides"
 logo = "assets/bastion.svg"
 favicon = "assets/bastion.svg"
@@ -53,7 +53,7 @@ features = [
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
 toggle.icon = "lucide/sun-moon"
-toggle.name = "Följ systemets tema"
+toggle.name = "Follow the system theme"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
@@ -61,7 +61,7 @@ scheme = "default"
 primary = "black"
 accent = "deep orange"
 toggle.icon = "lucide/sun"
-toggle.name = "Byt till mörkt tema"
+toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
@@ -69,4 +69,4 @@ scheme = "slate"
 primary = "black"
 accent = "deep orange"
 toggle.icon = "lucide/moon"
-toggle.name = "Byt till systemets tema"
+toggle.name = "Switch to the system theme"

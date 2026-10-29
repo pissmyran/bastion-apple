@@ -1,43 +1,43 @@
-# Uppförandekod
+# Code of conduct
 
-Bastion ska vara sakliga, respektfulla och trygga att delta i. Det gäller i issues, pull requests, Discussions, kodgranskningar och andra ytor som hör till Bastion.
+Working on Bastion should be factual, respectful and safe to take part in. This applies to issues, pull requests, Discussions, code reviews and every other space that belongs to Bastion.
 
-## Förväntat beteende
+## Expected behavior
 
-Vi förväntar oss att deltagare:
+We expect participants to:
 
-- bemöter andra respektfullt även vid oenighet,
-- håller diskussioner relevanta för projektet,
-- ger konkret och konstruktiv återkoppling,
-- respekterar privatliv och undviker att publicera personuppgifter eller annan känslig information,
-- följer respektive repositorys säkerhets- och bidragsrutiner,
-- hjälper till att skapa en miljö där frågor, misstag och förbättringsförslag kan hanteras sakligt.
+- treat others with respect, also when they disagree,
+- keep discussions relevant to the project,
+- give concrete and constructive feedback,
+- respect privacy and avoid publishing personal data or other sensitive information,
+- follow each repository's security and contribution routines,
+- help create a space where questions, mistakes and suggestions can be handled factually.
 
-## Oacceptabelt beteende
+## Unacceptable behavior
 
-Följande accepteras inte:
+The following is not accepted:
 
-- trakasserier, hot eller personangrepp,
-- diskriminerande eller nedsättande kommentarer,
-- upprepade störningar, spam eller medvetet destruktivt beteende,
-- publicering av privata, känsliga eller säkerhetskritiska uppgifter utan tillstånd,
-- sexuellt eller på annat sätt olämpligt innehåll i projektens samarbetsytor,
-- försök att kringgå säkerhetsrutiner, moderering eller tekniska skydd.
+- harassment, threats or personal attacks,
+- discriminatory or demeaning comments,
+- repeated disruption, spam or deliberately destructive behavior,
+- publishing private, sensitive or security-critical data without permission,
+- sexual or otherwise inappropriate content in the project's spaces,
+- attempts to bypass security routines, moderation or technical safeguards.
 
-## Moderering
+## Moderation
 
-Maintainers får redigera, dölja, låsa eller ta bort innehåll som bryter mot denna uppförandekod. Vid återkommande eller allvarliga överträdelser kan deltagare få begränsad åtkomst eller stängas av från Bastions samarbetsytor.
+Maintainers may edit, hide, lock or remove content that breaks this code of conduct. Repeated or serious violations can lead to restricted access or removal from Bastion's spaces.
 
-Åtgärder ska stå i rimlig proportion till beteendets allvar, omfattning och upprepning.
+Actions should be proportionate to the severity, scope and repetition of the behavior.
 
-## Rapportera problem
+## Reporting problems
 
-Rapportera inte privata eller säkerhetskänsliga uppgifter i ett publikt issue eller en publik Discussion.
+Do not report private or security-sensitive information in a public issue or Discussion.
 
-För säkerhetsrelaterade problem: följ `SECURITY.md` i det berörda repositoryt.
+For security problems, follow `SECURITY.md` in the affected repository.
 
-För övriga överträdelser: kontakta en maintainer via en lämplig privat kanal om sådan finns. Om ingen privat kanal finns, skapa ett kort publikt ärende utan känsliga detaljer och be om en privat kontaktväg.
+For other violations, contact a maintainer through a suitable private channel if one exists. If none exists, open a short public issue without sensitive details and ask for a private contact channel.
 
-## Omfattning
+## Scope
 
-Denna uppförandekod gäller som gemensam standard för Bastions repositories där ingen mer specifik lokal policy finns. En lokal policy i ett repository har företräde för det repositoryt.
+This code of conduct is the shared standard for Bastion's repositories where no more specific local policy exists. A local policy takes precedence in its repository.
