@@ -31,6 +31,14 @@ sh App/generate-project.sh
 
 The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Bastion-macOS` and `Bastion-tvOS`. Always run `App/generate-project.sh`, never `xcodegen` directly: the script reads the dependency versions in `App/Package.swift` and passes them on.
 
+## CodeRabbit reviews
+
+[`.coderabbit.yaml`](.coderabbit.yaml) inherits shared settings from
+`pissmyran/coderabbit` and adds Apple security, platform and verification guidance.
+Explicit links to the Bastion hub, Linux, Windows and Android repositories support
+cross-platform documentation and sync compatibility reviews. See
+[review configuration verification](docs/operations.md#coderabbit-configuration).
+
 ## More
 
 - [The documentation](https://pissmyran.github.io/bastion_apple/): getting started, architecture, operations, sync format and releases
