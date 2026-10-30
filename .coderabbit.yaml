@@ -1,5 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 
+# Inherit the shared CodeRabbit settings.
+# Keep only Bastion for Apple overrides here.
 inheritance: true
 
 reviews:
@@ -14,6 +16,7 @@ reviews:
         where those connection paths exist.
         When agent forwarding changes, check that the user's
         explicit forwardAgent choice still controls access.
+        UI code must not bypass SSHCore checks.
 
     # Concurrency and connection lifetime.
     - path: "{Sources/SSHCore/{SSHSession,SSHShell,SFTPClient}.swift,App/{ChainConnector,TerminalView}.swift,App/TVApp/ChainConnector.swift}"
@@ -44,6 +47,10 @@ reviews:
         data on failure and do not lose concurrent local changes.
         Do not assume identical feature support across platforms.
         Never change fixtures just to hide a format break.
+        Apple owns the shared sync format. Follow docs/sync-format.md:
+        intentional format changes update models and fixtures together,
+        identify the format change in the PR and require follow-up issues
+        in affected platform repositories.
 
     # Encrypted sync format.
     - path: "Sources/SSHCore/SyncCrypto.swift"
@@ -85,6 +92,7 @@ reviews:
         Protocol errors and a closed channel must end pending calls.
         Check that opened file and directory handles are closed
         even when read, write or decode fails.
+        Close file and directory handles on cancellation too.
 
     # TCP and SOCKS forwarding.
     - path: "Sources/SSHCore/{PortForward,SOCKSProxy}.swift"
@@ -134,15 +142,49 @@ reviews:
         as successful object operations.
 
     # Apple project dependency and target boundaries.
-    - path: "App/{Package.swift,project.yml,project.dependencies.yml,generate-project.sh}"
+    - path: "{Package.swift,App/{Package.swift,project.yml,project.dependencies.yml,generate-project.sh}}"
       instructions: |
-        When the SwiftTerm version or project generation changes,
-        check the chain App/Package.swift, SWIFTTERM_VERSION,
-        project.dependencies.yml and generate-project.sh.
-        Check that App/Package.swift never becomes regular app source
-        and that the tvOS target does not accidentally get SwiftTerm or
-        iOS/macOS files that use unavailable APIs.
-        Keep the apps using SSHCore from the root package.
+        When dependencies change, update the manifest that owns them:
+        root Package.swift owns SSHCore and bastion-cli;
+        App/Package.swift owns app dependencies.
+        For SwiftTerm, check App/Package.swift, SWIFTTERM_VERSION,
+        project.dependencies.yml and generate-project.sh together.
+        Generate projects through App/generate-project.sh, not xcodegen directly.
+        App/Package.swift must remain excluded from app source.
+        tvOS must not acquire SwiftTerm or unavailable iOS/macOS APIs.
+        Apps must continue to use SSHCore from the root package.
+        Do not add signing credentials, certificates or provisioning profiles.
+
+    # Apple UI and platform availability.
+    - path: "App/**/*.swift"
+      instructions: |
+        When shared UI code changes, check API availability and conditional
+        compilation for every target that includes the file.
+        Keep iOS/macOS terminal integration separate from tvOS.
+        UI changes must not bypass SSHCore authentication or host key checks.
+        Check actor isolation when asynchronous work updates UI state.
+        Check cancellation and resource cleanup when views or sessions close.
+
+    # Credential storage.
+    - path: "App/{Keychain,OAuthTokenStore,TVApp/Keychain,TVApp/TVOAuthTokenStore}.swift"
+      instructions: |
+        When credential persistence changes, check Keychain error handling
+        and account/service isolation before reporting success.
+        Preserve existing credentials when replacement storage fails.
+        Do not move keys, passwords or tokens into ordinary files,
+        preferences, logs or test fixtures.
+
+    # Verification evidence.
+    - path: "{Sources/**/*.swift,Tests/**,App/**,Package.swift}"
+      instructions: |
+        For changes affecting Swift behavior or builds, distinguish package
+        verification from Apple app verification.
+        The root package can be built and tested on Linux or macOS.
+        Apple apps require Xcode on macOS.
+        Follow AGENTS.md and docs/operations.md for applicable checks.
+        Do not claim CI tested the Swift code without evidence.
+        If an affected app target could not be built or tested, require
+        that limitation to be stated in the PR.
 
     # Publishing releases.
     - path: ".github/{workflows/release.yml,scripts/semantic_release.py,scripts/wait_for_checks.py,release-baseline,release-required-checks}"
@@ -157,3 +199,38 @@ reviews:
         published again with different content.
         Check stable versions, rc and promote against the parser
         and existing release anchors without bypassing the check gate.
+        Workflows remain owner-managed; do not propose agent workflow edits.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+    - '**/AGENTS.md'
+    - pissmyran/.github:GOVERNANCE.md
+    - pissmyran/.github:BASTION.md
+    - files: docs/architecture.md
+      applyTo: Sources/**,App/**,Package.swift
+    - files: docs/operations.md
+      applyTo: Sources/**,Tests/**,App/**,Package.swift
+    - files: docs/sync-format.md
+      applyTo: Sources/SSHCore/**,Tests/fixtures/**
+  linked_repositories:
+  - repository: pissmyran/bastion
+    instructions: |
+      Bastion hub and shared documentation.
+      Check user-facing documentation affected by Apple behavior changes.
+  - repository: pissmyran/bastion_linux
+    instructions: |
+      Linux client and consumer of Apple's sync format.
+      Compare affected readers and fixture copies for compatibility.
+      Do not assume identical platform features.
+  - repository: pissmyran/bastion_windows
+    instructions: |
+      Windows client and consumer of Apple's sync format.
+      Compare affected readers and fixture copies for compatibility.
+      Do not assume identical platform features.
+  - repository: pissmyran/bastion_android
+    instructions: |
+      Android client in the Bastion platform family.
+      Check affected sync interoperability where implemented.
+      Do not assume identical platform features.

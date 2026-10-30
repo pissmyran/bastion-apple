@@ -33,3 +33,12 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the dependency versions in `App/Package.swift` and passes them on. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
+
+## CodeRabbit configuration
+
+Keep `inheritance: true` in `.coderabbit.yaml`; shared settings belong in
+`pissmyran/coderabbit`. Local instructions cover Apple security boundaries,
+platform availability, verification and shared sync compatibility. Preserve the
+explicit Bastion hub, Linux, Windows and Android links without assuming feature
+parity or repository access. Follow [docs/operations.md](docs/operations.md#coderabbit-configuration)
+when validating configuration changes.
