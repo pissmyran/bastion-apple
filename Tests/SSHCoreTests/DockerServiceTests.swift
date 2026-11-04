@@ -18,11 +18,13 @@ final class DockerServiceTests: XCTestCase {
     }
 
     func testCommandBuilders() throws {
-        XCTAssertEqual(try DockerService.startCommand("plex"), "docker start plex")
-        XCTAssertEqual(try DockerService.stopCommand("plex"), "docker stop plex")
-        XCTAssertEqual(try DockerService.restartCommand("plex"), "docker restart plex")
-        XCTAssertEqual(try DockerService.logsCommand("plex", tail: 100), "docker logs --tail 100 plex 2>&1")
-        XCTAssertEqual(try DockerService.logsCommand("plex", tail: 0), "docker logs --tail 1 plex 2>&1")
+        XCTAssertEqual(try DockerService.startCommand("plex"), "docker start 'plex'")
+        XCTAssertEqual(try DockerService.stopCommand("plex"), "docker stop 'plex'")
+        XCTAssertEqual(try DockerService.restartCommand("plex"), "docker restart 'plex'")
+        XCTAssertEqual(try DockerService.logsCommand("plex", tail: 100), "docker logs --tail 100 'plex' 2>&1")
+        XCTAssertEqual(try DockerService.logsCommand("plex", tail: 0), "docker logs --tail 1 'plex' 2>&1")
+        XCTAssertEqual(try DockerService.execShellCommand("plex"),
+                       "docker exec -it 'plex' sh -c 'command -v bash >/dev/null && exec bash || exec sh'")
         XCTAssertEqual(DockerService.listCommand(all: true),
                        "docker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}' 2>/dev/null")
         XCTAssertEqual(DockerService.listCommand(all: false),
@@ -31,6 +33,22 @@ final class DockerServiceTests: XCTestCase {
 
     func testInjectionCannotReachCommandBuilder() {
         XCTAssertThrowsError(try DockerService.stopCommand("plex; rm -rf /"))
+    }
+
+    func testTrailingLineSeparatorsCannotReachCommandBuilders() {
+        let builders: [(String) throws -> String] = [
+            DockerService.startCommand, DockerService.stopCommand, DockerService.restartCommand,
+            { try DockerService.logsCommand($0, tail: 1) }, DockerService.execShellCommand,
+        ]
+        for separator in ["\n", "\r", "\r\n", "\u{0085}", "\u{2028}", "\u{2029}"] {
+            let ref = "plex" + separator
+            XCTAssertThrowsError(try DockerService.validate(ref), ref.debugDescription)
+            for build in builders {
+                XCTAssertThrowsError(try build(ref), ref.debugDescription) { error in
+                    XCTAssertEqual(error as? DockerError, .invalidReference(ref))
+                }
+            }
+        }
     }
 
     func testParseListRunningAndStopped() {

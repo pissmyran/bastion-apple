@@ -19,6 +19,15 @@ final class KubernetesServiceTests: XCTestCase {
         XCTAssertThrowsError(try KubernetesService.validate(String(repeating: "a", count: 64)))
     }
 
+    func testValidationRejectsTrailingLineSeparators() {
+        for separator in ["\n", "\r", "\r\n", "\u{0085}", "\u{2028}", "\u{2029}"] {
+            let name = "nginx" + separator
+            XCTAssertThrowsError(try KubernetesService.validate(name), name.debugDescription)
+            XCTAssertThrowsError(try KubernetesService.podLogsCommand(namespace: "default", pod: name, tail: 1))
+            XCTAssertThrowsError(try KubernetesService.podsCommand(.named(name)))
+        }
+    }
+
     func testInjectionCannotReachCommandBuilders() {
         for bad in ["pod; rm -rf /", "pod && curl evil", "pod$(id)", "pod|tee x", "'pod'", "a b"] {
             XCTAssertThrowsError(try KubernetesService.podLogsCommand(namespace: "default", pod: bad, tail: 100))

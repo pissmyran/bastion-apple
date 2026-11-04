@@ -110,7 +110,9 @@ public enum KubernetesService {
 
     public static func validate(_ name: String) throws -> String {
         let range = NSRange(name.startIndex..<name.endIndex, in: name)
-        guard name.count <= 63, namePattern.firstMatch(in: name, range: range) != nil else {
+        // Require the match to cover the whole name: `$` also matches before a
+        // trailing line separator, so `firstMatch != nil` would accept "pod\n".
+        guard name.count <= 63, namePattern.firstMatch(in: name, range: range)?.range == range else {
             throw KubernetesError.invalidName(name)
         }
         return name
