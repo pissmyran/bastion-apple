@@ -29,7 +29,7 @@ A merge that only contains, for example, `docs:` releases no new version, so the
 
 ## Manual releases and release candidates
 
-`release.yml` can also be started by hand (`workflow_dispatch`). `release_type` forces a bump (`patch`, `minor`, `major`; never lower than the commits require) or `promote`s the active release candidate to stable. `channel: rc` creates a prerelease tag `vMAJOR.MINOR.PATCH-rc.N`; prereleases do not publish the documentation.
+`release.yml` can also be started by hand (`workflow_dispatch`). `release_type` forces a bump (`patch`, `minor`, `major`; a bump lower than the commits require makes the release fail instead of being raised) or `promote`s the active release candidate to stable. `channel: rc` creates a prerelease tag `vMAJOR.MINOR.PATCH-rc.N`; prereleases do not publish the documentation.
 
 ## Required checks
 

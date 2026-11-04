@@ -16,10 +16,15 @@ Build and test the Swift package (works on Linux and macOS):
 swift build && swift test
 ```
 
-Run a single test class, or a single test method (replace `testLastWriteWins` with the method you want):
+Run a single test class:
 
 ```bash
 swift test --filter SSHCoreTests.SyncEngineTests
+```
+
+Run a single test method (replace `testLastWriteWins` with the method you want):
+
+```bash
 swift test --filter SSHCoreTests.SyncEngineTests/testLastWriteWins
 ```
 

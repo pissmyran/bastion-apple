@@ -18,10 +18,15 @@ Build and test the Swift package (works on Linux and macOS):
 swift build && swift test
 ```
 
-Run a single test class, or a single test method (replace `testLastWriteWins` with the method you want):
+Run a single test class:
 
 ```bash
 swift test --filter SSHCoreTests.SyncEngineTests
+```
+
+Run a single test method (replace `testLastWriteWins` with the method you want):
+
+```bash
 swift test --filter SSHCoreTests.SyncEngineTests/testLastWriteWins
 ```
 
@@ -45,7 +50,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 
 ## Rules
 
-- **No signing secrets in the repository:** `App/project.yml` holds signing *settings* (team ID, signing style, provisioning profile names) and `App/fastlane/` fetches certificates with `match`. Never commit certificates, provisioning profiles, private keys, App Store Connect API keys or match passwords; they come from environment variables and the encrypted match repository.
+- **Signing:** `App/project.yml` holds signing *settings* (team ID, signing style, provisioning profile names) and `App/fastlane/` fetches certificates with `match`. Never commit certificates, provisioning profiles, private keys, App Store Connect API keys or match passwords; they come from environment variables and the encrypted match repository.
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow `docs/sync-format.md`.
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.

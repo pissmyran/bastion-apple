@@ -12,7 +12,7 @@ Bastion for Apple is the **source** of the sync format. The Swift models in `Sou
 | `snippets` | Snippets. Added after the format was in use, so a missing field is read as no snippets |
 | `tombstones` | Deleted IDs with deletion time, shared by hosts and snippets |
 
-`SyncCrypto` encrypts the document for transports that store it elsewhere: the key is derived with PBKDF2-HMAC-SHA256 and the payload is sealed with AES-256-GCM, in an envelope that starts with `BSYNC1`. SSHCore provides `FolderSyncProvider` (a plain JSON file) and `EncryptedFolderSyncProvider`; the apps add Dropbox, Google Drive and OneDrive.
+`SyncCrypto` encrypts the document for transports that store it elsewhere: the key is derived with PBKDF2-HMAC-SHA256 and the payload is sealed with AES-256-GCM, in an envelope that starts with `BSYNC1`. SSHCore provides `FolderSyncProvider` (a plain JSON file) and `EncryptedFolderSyncProvider`; the apps add Dropbox (iOS and macOS only), Google Drive and OneDrive.
 
 ## Fixtures
 
