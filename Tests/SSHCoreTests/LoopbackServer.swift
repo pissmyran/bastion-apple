@@ -579,6 +579,13 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
     // Testservern tolererar bara en bunden port åt gången — tillräckligt för
     // testerna, ingen riktig produktionsbegränsning.
     private var forwarder: ServerRemoteForwarder?
+    private let channelClose: EventLoopFuture<Void>
+    private let withheldCancel: NIOLockedValueBox<Bool>?
+
+    init(channel: Channel, withheldCancel: NIOLockedValueBox<Bool>? = nil) {
+        self.channelClose = channel.closeFuture
+        self.withheldCancel = withheldCancel
+    }
 
     func tcpForwardingRequest(
         _ request: GlobalRequest.TCPForwardingRequest,
@@ -593,6 +600,15 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
                 .map { GlobalRequest.TCPForwardingResponse(boundPort: $0) }
                 .cascade(to: promise)
         case .cancel:
+            if let withheldCancel {
+                withheldCancel.withLockedValue { $0 = true }
+                let forwarder = self.forwarder
+                channelClose.whenComplete { _ in
+                    forwarder?.stopListening()
+                    promise.fail(ChannelError.eof)
+                }
+                return
+            }
             forwarder?.stopListening()
             forwarder = nil
             promise.succeed(GlobalRequest.TCPForwardingResponse(boundPort: nil))
@@ -618,6 +634,7 @@ struct LoopbackServer {
     /// `nil` om `start(silenceable:)` inte bad om det. Sätt till `true` för
     /// att låta servern sluta svara utan att stänga anslutningen.
     let silent: NIOLockedValueBox<Bool>?
+    let withheldCancel: NIOLockedValueBox<Bool>?
     var port: Int { channel.localAddress?.port ?? 0 }
 
     /// `realDirectTCPIPForwarding`: `false` (default) ekar bara tillbaka
@@ -631,7 +648,8 @@ struct LoopbackServer {
     static func start(
         password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
         realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
-        trackWindowChanges: Bool = false, silenceable: Bool = false
+        trackWindowChanges: Bool = false, silenceable: Bool = false,
+        withholdCancelReply: Bool = false
     ) throws -> LoopbackServer {
         // Real execution must not be reachable using a known test password or key.
         precondition(!realExec || (password == nil && authorizedPublicKey == nil))
@@ -645,6 +663,7 @@ struct LoopbackServer {
         let observedWindowChanges: NIOLockedValueBox<[(cols: Int, rows: Int)]>? =
             trackWindowChanges ? NIOLockedValueBox([]) : nil
         let silent: NIOLockedValueBox<Bool>? = silenceable ? NIOLockedValueBox(false) : nil
+        let withheldCancel: NIOLockedValueBox<Bool>? = withholdCancelReply ? NIOLockedValueBox(false) : nil
         let realForwarder = makeRealDirectTCPIPForwarder(group: group)
         let bootstrap = ServerBootstrap(group: group)
             .childChannelInitializer { channel in
@@ -653,7 +672,7 @@ struct LoopbackServer {
                         role: .server(.init(
                             hostKeys: [hostKey],
                             userAuthDelegate: ServerAuth(password: password, authorizedPublicKey: allowedKey),
-                            globalRequestDelegate: ServerRemoteForwardingDelegate())),
+                            globalRequestDelegate: ServerRemoteForwardingDelegate(channel: channel, withheldCancel: withheldCancel))),
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: { child, channelType in
                             switch channelType {
@@ -680,7 +699,7 @@ struct LoopbackServer {
             sftpRoot: sftpRoot,
             observedDirectTCPIPTargets: observedDirectTCPIPTargets,
             observedWindowChanges: observedWindowChanges,
-            silent: silent)
+            silent: silent, withheldCancel: withheldCancel)
     }
 
     func shutdown() {

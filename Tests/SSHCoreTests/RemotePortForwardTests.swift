@@ -35,6 +35,71 @@ private final class ByteCollectorHandler: ChannelInboundHandler, @unchecked Send
 }
 
 final class RemotePortForwardTests: XCTestCase {
+    func testDisconnectDoesNotWaitForCancelReply() async throws {
+        let server = try LoopbackServer.start(password: "hunter2", withholdCancelReply: true)
+        defer { server.shutdown() }
+        let session = SSHSession(
+            target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let target = try await ServerBootstrap(group: group)
+            .childChannelInitializer { $0.pipeline.addHandler(TCPEchoHandler()) }
+            .bind(host: "127.0.0.1", port: 0).get()
+        let forward = try await session.openRemotePortForward(
+            bindPort: 0, targetHost: "127.0.0.1", targetPort: target.localAddress!.port!)
+        let local = try await session.openLocalPortForward(
+            bindPort: 0, targetHost: "example.com", targetPort: 80)
+        let localPort = local.actualBindPort
+        let collector = ByteCollectorHandler()
+        let external = try await ClientBootstrap(group: group)
+            .channelInitializer { $0.pipeline.addHandler(collector) }
+            .connect(host: "127.0.0.1", port: forward.actualBindPort).get()
+        var buffer = external.allocator.buffer(capacity: 4)
+        buffer.writeString("ping")
+        try await external.writeAndFlush(buffer).get()
+        for _ in 0..<100 {
+            if await collector.text().contains("ping") { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let received = await collector.text()
+
+        var cleanupError: Error?
+        do {
+            // The server retains the cancellation promise until transport close.
+            try await withTimeout(seconds: 3) { await forward.close() }
+            for _ in 0..<100 {
+                if server.withheldCancel!.withLockedValue({ $0 }) { break }
+                try await Task.sleep(nanoseconds: 20_000_000)
+            }
+            XCTAssertTrue(server.withheldCancel!.withLockedValue { $0 })
+            XCTAssertNil(session.remoteForwards.withLockedValue { $0[forward.actualBindPort] })
+        } catch {
+            cleanupError = error
+        }
+
+        await local.close()
+        var localStillListening = false
+        if let lateClient = try? await ClientBootstrap(group: group)
+            .connect(host: "127.0.0.1", port: localPort).get() {
+            localStillListening = true
+            try? await lateClient.close().get()
+        }
+        await session.close()
+        do {
+            try await withTimeout(seconds: 3) { try await external.closeFuture.get() }
+        } catch {
+            if cleanupError == nil { cleanupError = error }
+        }
+        try? await external.close().get()
+        try? await target.close().get()
+        try? await group.shutdownGracefully()
+        XCTAssertEqual(received, "ping")
+        XCTAssertFalse(localStillListening)
+        if let cleanupError { throw cleanupError }
+    }
+
     /// Fjärr-portvidarebefordran end-to-end: en riktig extern TCP-anslutning
     /// mot den port servern binder åt oss (LoopbackServers `ServerRemoteForwarder`),
     /// genom en `forwarded-tcpip`-SSH-kanal tillbaka till klienten, till en

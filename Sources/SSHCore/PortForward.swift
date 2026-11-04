@@ -163,23 +163,20 @@ public final class RemotePortForward {
         self.targetPort = targetPort
     }
 
-    /// Ber servern sluta vidarebefordra och tar bort routningen lokalt.
-    /// Best-effort (samma som `LocalPortForward.close()`s `try?`-mönster) —
-    /// om sessionen redan är stängd/borta finns inget att avbeställa.
+    /// Removes the local route and sends a best-effort cancellation without
+    /// waiting for a reply from the server.
     public func close() async {
         guard let session, let channel = session.channel else { return }
         session.remoteForwards.withLockedValue { $0.removeValue(forKey: actualBindPort) }
         guard let sshHandler = try? await channel.pipeline.handler(type: NIOSSHHandler.self).get() else { return }
-        let promise = channel.eventLoop.makePromise(of: GlobalRequest.TCPForwardingResponse?.self)
         // sendTCPForwardingRequest är dokumenterat "inte trådsäker, får bara
         // anropas på kanalens egen event loop" — en async-fortsättning
         // garanterar INTE att vi fortfarande kör där, så själva anropet måste
         // skickas in explicit via eventLoop.execute (kraschade annars med
         // "Precondition failed" i assumeIsolatedUnsafeUnchecked).
         channel.eventLoop.execute {
-            sshHandler.sendTCPForwardingRequest(.cancel(host: self.bindHost, port: self.actualBindPort), promise: promise)
+            sshHandler.sendTCPForwardingRequest(.cancel(host: self.bindHost, port: self.actualBindPort))
         }
-        _ = try? await promise.futureResult.get()
     }
 }
 
