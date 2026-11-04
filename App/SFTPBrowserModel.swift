@@ -247,10 +247,13 @@ final class SFTPBrowserModel: ObservableObject {
     /// redan hålls öppen av `ensureClient()` medan man bläddrar återanvänds
     /// rakt av, ingen ny session öppnas. Mappar laddas upp REKURSIVT.
     func uploadDropped(_ urls: [URL]) async {
+        errorMessage = nil
         for url in urls {
             await uploadOne(url)
         }
+        let uploadError = errorMessage
         await refresh()
+        if let uploadError { errorMessage = uploadError }
     }
 
     private func uploadOne(_ localURL: URL) async {
@@ -260,54 +263,34 @@ final class SFTPBrowserModel: ObservableObject {
         let accessing = localURL.startAccessingSecurityScopedResource()
         defer { if accessing { localURL.stopAccessingSecurityScopedResource() } }
 
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDirectory) else {
-            errorMessage = "Hittar inte \(localURL.lastPathComponent)."
-            return
-        }
-
-        let remotePath = joined(localURL.lastPathComponent)
-        if isDirectory.boolValue {
-            await uploadDirectory(localURL, remotePath: remotePath)
-        } else {
-            await uploadFile(localURL, remotePath: remotePath)
+        do {
+            let source = try SFTPUploadSource.open(localURL)
+            await upload(source, name: localURL.lastPathComponent, remotePath: joined(localURL.lastPathComponent))
+        } catch {
+            errorMessage = "\(localURL.lastPathComponent): \(error.localizedDescription)"
         }
     }
 
-    private func uploadFile(_ localURL: URL, remotePath: String) async {
+    private func upload(_ source: SFTPUploadSource, name: String, remotePath: String) async {
         guard let client = await ensureClient() else { return }
         do {
-            let data = try Data(contentsOf: localURL)
-            try await client.writeFile(remotePath, data: Array(data))
-        } catch {
-            errorMessage = "\(localURL.lastPathComponent): \(error)"
-        }
-    }
-
-    /// `mkdir`-fel ignoreras medvetet — SFTP version 3 (den version den
-    /// här klienten talar) har ingen egen "finns redan"-statuskod (den
-    /// kom först i v6), så ett fel HÄR kan lika gärna betyda "mappen
-    /// finns redan" (ofarligt vid omuppladdning) som ett riktigt problem —
-    /// då misslyckas ändå filuppladdningarna in i den mappen nedan, med
-    /// sitt eget tydliga fel per fil.
-    private func uploadDirectory(_ localURL: URL, remotePath: String) async {
-        guard let client = await ensureClient() else { return }
-        try? await client.mkdir(remotePath)
-
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: localURL, includingPropertiesForKeys: [.isDirectoryKey])
-        else {
-            errorMessage = "Kunde inte läsa mappen \(localURL.lastPathComponent)."
-            return
-        }
-        for entry in entries {
-            let childRemotePath = remotePath + "/" + entry.lastPathComponent
-            let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            if isDir {
-                await uploadDirectory(entry, remotePath: childRemotePath)
+            if source.isDirectory {
+                // SFTP v3 has no distinct already-exists status for mkdir.
+                try? await client.mkdir(remotePath)
+                for childName in try source.childNames() {
+                    do {
+                        let child = try source.child(named: childName)
+                        await upload(child, name: childName, remotePath: remotePath + "/" + childName)
+                    } catch {
+                        errorMessage = "\(childName): \(error.localizedDescription)"
+                    }
+                }
             } else {
-                await uploadFile(entry, remotePath: childRemotePath)
+                let data = try source.read()
+                try await client.writeFile(remotePath, data: Array(data))
             }
+        } catch {
+            errorMessage = "\(name): \(error.localizedDescription)"
         }
     }
 
