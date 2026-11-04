@@ -399,6 +399,26 @@ final class CloudflareServiceTests: XCTestCase {
         XCTAssertTrue(tunnels[1].colos.isEmpty)
     }
 
+    func testColosPreserveFirstOccurrenceAndSkipEmptyNames() throws {
+        let json = """
+        [{"name": "t", "connections": [
+            {"colo_name": "HEL", "is_pending_reconnect": true},
+            {}, {"colo_name": ""}, {"colo_name": "ARN"},
+            {"colo_name": "HEL"}, {"colo_name": "hel"}]}]
+        """
+        let tunnel = try XCTUnwrap(CloudflareService.parseTunnels(json).first)
+        XCTAssertEqual(tunnel.colos, ["HEL", "ARN", "hel"])
+    }
+
+    func testColosWithManyDistinctConnections() {
+        let names = (0..<10_000).map { "colo-\($0)" }
+        let connections = (names + names.reversed()).map {
+            CloudflareConnection(colo: $0, pendingReconnect: false)
+        }
+        let tunnel = CloudflareTunnel(id: "t", name: "t", connections: connections)
+        XCTAssertEqual(tunnel.colos, names)
+    }
+
     /// Äldre utdata saknar `connections`. Posten ska bli en tunnel som är NERE,
     /// inte hoppas över — annars försvinner den ur listan helt.
     func testMissingConnectionsFieldYieldsADownTunnelNotADroppedRow() {
