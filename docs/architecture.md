@@ -30,6 +30,8 @@ Bastion for Apple is a shared core with three apps on top.
 
 Reading `~/.ssh/config` expands `Include` inline, skips cycles and reads only regular files. A load from disk stops at shared limits (256 file reads, 8 MiB, 100,000 entries and host patterns, 4,096 directory entries, 4,096 include patterns) and keeps what it read before the limit, so a hostile or runaway config cannot exhaust memory or time.
 
+Importing an SSH config adds only aliases that do not exist yet and never changes existing hosts. A host whose `ProxyJump` cannot be linked (unresolved, pointing at itself, several hops, or a jump host that has its own jump, since connections support one hop) is skipped together with the hosts that depend on it, so the app never connects directly to a host that is meant to be reached through a jump.
+
 The package declares macOS 13 and iOS 16 as minimum platforms.
 
 ## The apps
