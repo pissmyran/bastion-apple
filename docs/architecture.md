@@ -28,6 +28,8 @@ Bastion for Apple is a shared core with three apps on top.
 | Sync | `SyncEngine`, `SyncProvider`, the folder transports and `SyncCrypto`; see [Sync format](sync-format.md) |
 | Integrations | Docker, Kubernetes, Proxmox, TrueNAS, Unraid, Cloudflare, GitHub, Bitwarden and S3 clients, OAuth (PKCE) tokens |
 
+Reading `~/.ssh/config` expands `Include` inline, skips cycles and reads only regular files. A load from disk stops at shared limits (256 file reads, 8 MiB, 100,000 entries and host patterns, 4,096 directory entries, 4,096 include patterns) and keeps what it read before the limit, so a hostile or runaway config cannot exhaust memory or time.
+
 The package declares macOS 13 and iOS 16 as minimum platforms.
 
 ## The apps
