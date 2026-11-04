@@ -85,4 +85,55 @@ final class SystemProbeTests: XCTestCase {
         XCTAssertNil(s.memory)
         XCTAssertTrue(s.disks.isEmpty)
     }
+
+    func testMemoryRejectsInvalidCountersWithoutLosingOtherMetrics() {
+        let largestKB = Int64.max / 1024
+        for (total, available) in [
+            ("-1", "0"), ("1", "-1"), ("1", "2"),
+            (String(largestKB + 1), "0"), (String(largestKB + 1), String(largestKB + 1)),
+            (String(Int64.min), "0")
+        ] {
+            let s = SystemProbe.parse("@@MEM\nMemTotal: \(total) kB\nMemAvailable: \(available) kB\n@@HOST\nhost\n")
+            XCTAssertNil(s.memory, "total=\(total) available=\(available)")
+            XCTAssertEqual(s.hostname, "host")
+        }
+        let s = SystemProbe.parse("@@MEM\nMemTotal: \(largestKB) kB\nMemAvailable: 0 kB\n")
+        XCTAssertEqual(s.memory?.usedBytes, largestKB * 1024)
+    }
+
+    func testMemoryUsedBytesHandlesMutatedOrDecodedExtremes() {
+        XCTAssertEqual(MemoryInfo(totalBytes: .max, availableBytes: .min).usedBytes, .max)
+        XCTAssertEqual(MemoryInfo(totalBytes: .min, availableBytes: .max).usedBytes, 0)
+        XCTAssertEqual(MemoryInfo(totalBytes: 10, availableBytes: 20).usedBytes, 0)
+    }
+
+    func testDisksSkipOverflowNegativeValuesAndUsedAboveSize() {
+        let largestKB = Int64.max / 1024
+        let smallestKB = Int64.min / 1024
+        let s = SystemProbe.parse("""
+        @@DF
+        /ok \(largestKB) \(largestKB) 0 100% /ok
+        /size \(largestKB + 1) 0 0 0% /size
+        /used 1 \(largestKB + 1) 0 0% /used
+        /avail 1 0 \(smallestKB - 1) 0% /avail
+        /negative-size -1 0 0 0% /negative-size
+        /negative-used 1 -1 0 0% /negative-used
+        /negative-avail 1 0 -1 0% /negative-avail
+        /used-above-size 1 2 0 200% /used-above-size
+        /zero 0 0 0 0% /zero
+        """)
+        XCTAssertEqual(s.disks.map(\.mount), ["/ok", "/zero"])
+        XCTAssertEqual(s.disks.first?.sizeBytes, largestKB * 1024)
+        XCTAssertEqual(s.disks.first?.usedBytes, largestKB * 1024)
+        XCTAssertEqual(s.disks.first?.availableBytes, 0)
+    }
+
+    func testUptimeRejectsValuesUnsafeForIntegerConversion() {
+        for value in ["nan", "inf", "-inf", "-1", "1e100", String(Double(Int.max).nextUp)] {
+            XCTAssertNil(SystemProbe.parse("@@UPTIME\n\(value) 0\n").uptimeSeconds, value)
+        }
+        for value in [0.0, 1.25, Double(Int.max).nextDown] {
+            XCTAssertEqual(SystemProbe.parse("@@UPTIME\n\(value) 0\n").uptimeSeconds, value)
+        }
+    }
 }

@@ -133,7 +133,7 @@ struct DashboardView: View {
             infoRow("OS", s.os)
             infoRow("Kärna", s.kernel)
             infoRow("CPU-kärnor", s.cpuCount.map(String.init))
-            infoRow("Drifttid", s.uptimeSeconds.map(Self.formatUptime))
+            infoRow("Drifttid", s.uptimeSeconds.flatMap(Self.formatUptime))
         }
     }
 
@@ -150,11 +150,12 @@ struct DashboardView: View {
 
     private func meterCard(_ title: String, used: Int64, total: Int64) -> some View {
         let fraction = total > 0 ? Double(used) / Double(total) : 0
+        let percent = String(format: "%.0f", (fraction * 100).rounded(.towardZero))
         return Card(title) {
             VStack(alignment: .leading, spacing: 6) {
                 ProgressView(value: fraction)
                     .tint(fraction > 0.9 ? .red : (fraction > 0.75 ? .orange : .accentColor))
-                Text("\(Self.bytes(used)) av \(Self.bytes(total)) (\(Int(fraction * 100)) %)")
+                Text("\(Self.bytes(used)) av \(Self.bytes(total)) (\(percent) %)")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -195,8 +196,9 @@ struct DashboardView: View {
         ByteCountFormatter.string(fromByteCount: n, countStyle: .binary)
     }
 
-    static func formatUptime(_ seconds: Double) -> String {
-        let total = Int(seconds)
+    static func formatUptime(_ seconds: Double) -> String? {
+        guard seconds.isFinite, seconds >= 0,
+              let total = Int(exactly: seconds.rounded(.towardZero)) else { return nil }
         let d = total / 86400, h = (total % 86400) / 3600, m = (total % 3600) / 60
         if d > 0 { return "\(d) d \(h) h" }
         if h > 0 { return "\(h) h \(m) min" }
