@@ -34,6 +34,12 @@ Test the GUI prototype (required when `docs/prototype/bastion-gui.html` changes;
 node --test Tests/Prototype/terminal.test.js
 ```
 
+Test the CLI password prompt (after `swift build`; needs Python 3 and a POSIX terminal):
+
+```bash
+python3 Tests/cli_password_prompt_test.py
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
@@ -64,7 +70,7 @@ swift run bastion-cli -D [bindHost:]bindPort user@host[:port]
 swift run bastion-cli -J [user@]jumphost[:port] user@host[:port] "command"
 ```
 
-The password is read from `BASTION_PASSWORD` (otherwise from stdin). An Ed25519 key can be given as a raw 32-byte seed in hex through `BASTION_ED25519_HEX`. `ProxyJump` lines in `~/.ssh/config` are honoured; `-J` wins if both are set.
+The password is read from `BASTION_PASSWORD`; otherwise it is prompted for on the terminal without echo, or read as one line from piped stdin. An Ed25519 key can be given as a raw 32-byte seed in hex through `BASTION_ED25519_HEX`. `ProxyJump` lines in `~/.ssh/config` are honoured; `-J` wins if both are set.
 
 ## Contents
 

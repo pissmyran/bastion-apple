@@ -208,8 +208,8 @@ struct SFTPBrowserView: View {
                     .font(.body)
                     .lineLimit(1)
                 Spacer()
-                if !isDir, let size = entry.attributes.size, let byteCount = Int64(exactly: size) {
-                    Text(ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file))
+                if !isDir, let size = entry.attributes.size {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

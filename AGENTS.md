@@ -46,6 +46,12 @@ Test the GUI prototype (required when `docs/prototype/bastion-gui.html` changes;
 node --test Tests/Prototype/terminal.test.js
 ```
 
+Test the CLI password prompt (after `swift build`; needs Python 3 and a POSIX terminal):
+
+```bash
+python3 Tests/cli_password_prompt_test.py
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
