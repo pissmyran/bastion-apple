@@ -101,14 +101,16 @@ extension SecureEnclaveKey {
     /// publika delen, och den finns inte någon annanstans att hämta.
     /// Kommentaren är default `bastion@secure-enclave` så raden går att
     /// känna igen bland andra nycklar.
+    /// Comments containing CR, LF or NUL are omitted.
     public static func authorizedKeysLine(
         from stored: Data,
         comment: String = "bastion@secure-enclave"
     ) throws -> String {
         let publicKey = try privateKey(from: stored).publicKey
         var line = String(openSSHPublicKey: publicKey)
-        if !comment.isEmpty {
-            line += " " + comment
+        let safeComment = safePublicKeyComment(comment)
+        if !safeComment.isEmpty {
+            line += " " + safeComment
         }
         return line
     }
