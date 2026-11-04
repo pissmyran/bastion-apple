@@ -25,7 +25,7 @@ Bastion for Apple is the **source** of the sync format. The Swift models in `Sou
 ## The other platforms
 
 - **[Linux](https://github.com/Myrpisset/bastion-linux)** keeps copies of the fixtures in `LinuxApp/tests/fixtures/`.
-- **[Windows](https://github.com/Myrpisset/bastion-windows)** has its own sync implementation with its own fixture (`csharp-hosts-fixture.json`), not copies of these.
+- **[Windows](https://github.com/Myrpisset/bastion-windows)** has its own sync implementation with its own fixture (`csharp-hosts-fixture.json`), not copies of these. Its `SyncState` has only `hosts` and `tombstones`: it does not read snippets, and a document it writes has no `snippets` field.
 - **[Android](https://github.com/Myrpisset/bastion-android)** has no sync yet.
 
 ## When the format changes

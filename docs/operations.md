@@ -19,7 +19,11 @@ sh App/generate-project.sh
 When `docs/` or `zensical.toml` changes, build the documentation the same way CI does:
 
 ```bash
-pip install --upgrade zensical && zensical build --clean --strict
+pip install --upgrade zensical
+```
+
+```bash
+zensical build --clean --strict
 ```
 
 The apps cannot be built on Linux. If a target could not be built or tested, say so in the pull request.

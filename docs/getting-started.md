@@ -34,7 +34,11 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 Build the documentation:
 
 ```bash
-pip install --upgrade zensical && zensical build --strict
+pip install --upgrade zensical
+```
+
+```bash
+zensical build --strict
 ```
 
 ## The command-line tool

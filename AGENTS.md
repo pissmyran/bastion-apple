@@ -12,7 +12,7 @@ Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw
 
 ## Commands
 
-Build and test the Swift package (works on Linux and macOS). CI runs no build or tests, so this local run is the only test gate:
+Build and test the Swift package (works on Linux and macOS):
 
 ```bash
 swift build && swift test
@@ -28,7 +28,11 @@ swift test --filter SSHCoreTests.SyncEngineTests/testLastWriteWins
 Build the documentation (required when `docs/` or `zensical.toml` changes):
 
 ```bash
-pip install --upgrade zensical && zensical build --strict
+pip install --upgrade zensical
+```
+
+```bash
+zensical build --strict
 ```
 
 Generate the Xcode project (macOS only):
@@ -45,7 +49,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow `docs/sync-format.md`.
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
-- **Pull request titles follow Conventional Commits**; they decide the release version (see `docs/release.md`). Code, comments, documentation, commits and pull requests are written in English.
+- **Releases:** the pull request title decides the version; see `docs/release.md`.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
 ## CodeRabbit configuration
