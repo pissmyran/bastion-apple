@@ -40,6 +40,12 @@ pip install --upgrade zensical
 zensical build --strict
 ```
 
+Test the GUI prototype (required when `docs/prototype/bastion-gui.html` changes; needs Node.js):
+
+```bash
+node --test Tests/Prototype/terminal.test.js
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
