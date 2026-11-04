@@ -2,6 +2,7 @@ import XCTest
 import NIOCore
 import NIOPosix
 import NIOSSH
+import NIOConcurrencyHelpers
 @testable import SSHCore
 
 /// Ekar rakt tillbaka — används som "det lokala målet" (targetHost:targetPort)
@@ -32,6 +33,27 @@ private final class ByteCollectorHandler: ChannelInboundHandler, @unchecked Send
     }
 
     func text() async -> String { await box.value() }
+}
+
+private final class ControlledForwardDelegate: GlobalRequestDelegate {
+    let requests = NIOLockedValueBox<[(GlobalRequest.TCPForwardingRequest, EventLoopPromise<GlobalRequest.TCPForwardingResponse>)]>([])
+
+    func tcpForwardingRequest(
+        _ request: GlobalRequest.TCPForwardingRequest, handler: NIOSSHHandler,
+        promise: EventLoopPromise<GlobalRequest.TCPForwardingResponse>
+    ) {
+        requests.withLockedValue { $0.append((request, promise)) }
+    }
+
+    func waitForRequest(_ index: Int) async throws -> EventLoopPromise<GlobalRequest.TCPForwardingResponse> {
+        for _ in 0..<200 {
+            if let promise = requests.withLockedValue({ $0.count > index ? $0[index].1 : nil }) {
+                return promise
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        throw SSHError.channelFailed("timed out waiting for forwarding request")
+    }
 }
 
 final class RemotePortForwardTests: XCTestCase {
@@ -74,7 +96,9 @@ final class RemotePortForwardTests: XCTestCase {
                 try await Task.sleep(nanoseconds: 20_000_000)
             }
             XCTAssertTrue(server.withheldCancel!.withLockedValue { $0 })
-            XCTAssertNil(session.remoteForwards.withLockedValue { $0[forward.actualBindPort] })
+            // Without a reply the port stays reserved (the server may still be
+            // listening), but no longer routes connections.
+            XCTAssertEqual(session.remoteForwards.withLockedValue { $0[forward.actualBindPort]?.active }, false)
         } catch {
             cleanupError = error
         }
@@ -126,6 +150,17 @@ final class RemotePortForwardTests: XCTestCase {
         let forward = try await session.openRemotePortForward(
             bindPort: 0, targetHost: "127.0.0.1", targetPort: targetPort)
         XCTAssertGreaterThan(forward.actualBindPort, 0)
+        do {
+            _ = try await session.openRemotePortForward(
+                bindHost: "127.0.0.1", bindPort: forward.actualBindPort,
+                targetHost: "127.0.0.1", targetPort: 1)
+            XCTFail("duplicate port should be rejected")
+        } catch { }
+        do {
+            _ = try await session.openRemotePortForward(
+                bindHost: "127.0.0.1", bindPort: 0, targetHost: "127.0.0.1", targetPort: 1)
+            XCTFail("allocation while another port is reserved should be rejected")
+        } catch { }
 
         // Simulerar en extern klient som ansluter till servern.
         let clientGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -154,6 +189,139 @@ final class RemotePortForwardTests: XCTestCase {
         try? await clientGroup.shutdownGracefully()
 
         XCTAssertTrue(received.contains("hej genom fjärrtunneln"), "fick: \(received.debugDescription)")
+    }
+
+    func testPendingRequestsAndRefusalRelease() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let first = Task { try await session.openRemotePortForward(bindHost: "127.0.0.1", bindPort: 45678, targetHost: "first", targetPort: 1) }
+        let pending = try await delegate.waitForRequest(0)
+        do {
+            _ = try await session.openRemotePortForward(bindHost: "127.0.0.2", bindPort: 45678, targetHost: "second", targetPort: 2)
+            XCTFail("pending port must be reserved")
+        } catch { }
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 0, targetHost: "second", targetPort: 2)
+            XCTFail("allocation must wait for pending requests")
+        } catch { }
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 1)
+        pending.fail(SSHError.channelFailed("refused"))
+        do { _ = try await first.value; XCTFail("server refused") } catch { }
+
+        let retry = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "first", targetPort: 1) }
+        let retryRequest = try await delegate.waitForRequest(1)
+        retryRequest.succeed(.init(boundPort: nil))
+        let forward = try await retry.value
+        let closing = Task { await forward.close() }
+        let cancel = try await delegate.waitForRequest(2)
+        cancel.succeed(.init(boundPort: nil))
+        await closing.value
+        await session.close()
+    }
+
+    func testAllocationAndCancellationReservations() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let opening = Task { try await session.openRemotePortForward(bindPort: 0, targetHost: "first", targetPort: 1) }
+        let request = try await delegate.waitForRequest(0)
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 45678, targetHost: "second", targetPort: 2)
+            XCTFail("allocation in progress must be exclusive")
+        } catch { }
+        request.succeed(.init(boundPort: 45678))
+        let forward = try await opening.value
+        let closing = Task { await forward.close() }
+        let cancel = try await delegate.waitForRequest(1)
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 45678, targetHost: "second", targetPort: 2)
+            XCTFail("port must stay reserved while cancellation is pending")
+        } catch { }
+        cancel.fail(SSHError.channelFailed("refused"))
+        await closing.value
+        await forward.close()
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 45678, targetHost: "second", targetPort: 2)
+            XCTFail("failed cancellation must retain reservation")
+        } catch { }
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 2)
+        await session.close()
+    }
+
+    func testDistinctPortsCanBeReservedConcurrently() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let firstOpening = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "first", targetPort: 1) }
+        let firstRequest = try await delegate.waitForRequest(0)
+        let secondOpening = Task { try await session.openRemotePortForward(bindPort: 45679, targetHost: "second", targetPort: 2) }
+        let secondRequest = try await delegate.waitForRequest(1)
+        firstRequest.succeed(.init(boundPort: nil))
+        secondRequest.succeed(.init(boundPort: nil))
+        let first = try await firstOpening.value
+        let second = try await secondOpening.value
+        XCTAssertEqual(session.remoteForwards.withLockedValue { $0[45678]?.targetHost }, "first")
+        XCTAssertEqual(session.remoteForwards.withLockedValue { $0[45679]?.targetHost }, "second")
+        let firstClosing = Task { await first.close() }
+        try await delegate.waitForRequest(2).succeed(.init(boundPort: nil))
+        await firstClosing.value
+        let secondClosing = Task { await second.close() }
+        try await delegate.waitForRequest(3).succeed(.init(boundPort: nil))
+        await secondClosing.value
+        await session.close()
+    }
+
+    func testInvalidAllocatedPortKeepsReservation() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let opening = Task { try await session.openRemotePortForward(bindPort: 0, targetHost: "first", targetPort: 1) }
+        try await delegate.waitForRequest(0).succeed(.init(boundPort: nil))
+        do { _ = try await opening.value; XCTFail("missing allocated port must be rejected") } catch { }
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 45678, targetHost: "second", targetPort: 2)
+            XCTFail("unknown allocated port must keep the exclusive reservation")
+        } catch { }
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 1)
+        await session.close()
+    }
+
+    func testStaleCloseCannotCancelReplacement() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let opening = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "first", targetPort: 1) }
+        try await delegate.waitForRequest(0).succeed(.init(boundPort: nil))
+        let first = try await opening.value
+        let closing = Task { await first.close() }
+        try await delegate.waitForRequest(1).succeed(.init(boundPort: nil))
+        await closing.value
+        let replacement = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "second", targetPort: 2) }
+        try await delegate.waitForRequest(2).succeed(.init(boundPort: nil))
+        let second = try await replacement.value
+        await first.close()
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 3)
+        XCTAssertEqual(session.remoteForwards.withLockedValue { $0[45678]?.targetHost }, "second")
+        let closingSecond = Task { await second.close() }
+        try await delegate.waitForRequest(3).succeed(.init(boundPort: nil))
+        await closingSecond.value
+        await session.close()
     }
 
     /// Regressionstest: en `forwarded-tcpip`-kanal för en port som INTE har
