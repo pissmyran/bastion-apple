@@ -45,11 +45,12 @@ public struct CloudflareTunnel: Sendable, Equatable {
     /// Datacentren utan dubbletter. `cloudflared` öppnar normalt fyra
     /// anslutningar över två colos, och `ARN, ARN, HEL, HEL` vore brus.
     public var colos: [String] {
-        var seen: [String] = []
-        for c in connections where !c.colo.isEmpty && !seen.contains(c.colo) {
-            seen.append(c.colo)
+        var seen = Set<String>()
+        var result: [String] = []
+        for c in connections where !c.colo.isEmpty {
+            if seen.insert(c.colo).inserted { result.append(c.colo) }
         }
-        return seen
+        return result
     }
 }
 
