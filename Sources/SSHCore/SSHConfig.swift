@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// Uppslaget resultat för ett värdalias ur `~/.ssh/config`.
 public struct ResolvedHost: Sendable, Equatable {
@@ -44,6 +49,29 @@ public struct SSHConfig: Sendable {
     /// config som direkt eller indirekt inkluderar sig själv ska ge en
     /// trunkerad läsning, inte en oändlig loop.
     private static let maxIncludeDepth = 16
+    private static let maxFileReads = 256
+    private static let maxBytes = 8 * 1024 * 1024
+    private static let maxEntries = 100_000
+    private static let maxDirectoryEntries = 4096
+    private static let maxIncludePatterns = 4096
+    private static let maxGlobWork = 4_000_000
+
+    private struct FileIdentity: Hashable {
+        let device: UInt64
+        let inode: UInt64
+    }
+
+    private struct LoadState {
+        var bounded: Bool
+        var fileReads = 0
+        var bytes = 0
+        var entries = 0
+        var directoryEntries = 0
+        var includePatterns = 0
+        var globWork = 0
+        var exhausted = false
+        var active: Set<FileIdentity> = []
+    }
 
     private init(entries: [Entry]) {
         self.entries = entries
@@ -54,7 +82,8 @@ public struct SSHConfig: Sendable {
     /// ``load(path:)`` när filen finns på disk.
     public init(text: String) {
         var out: [Entry] = []
-        SSHConfig.collectEntries(text: text, baseDir: nil, depth: 0, into: &out)
+        var state = LoadState(bounded: false)
+        SSHConfig.collectEntries(text: text, baseDir: nil, depth: 0, into: &out, state: &state)
         self.entries = out
     }
 
@@ -65,83 +94,161 @@ public struct SSHConfig: Sendable {
     /// verktyg (1Password, Colima, OrbStack m.fl.) säger åt användaren att
     /// lägga upp sin config, och då står det inte en enda `Host`-rad i
     /// huvudfilen.
+    ///
+    /// Cycles are skipped. Disk loads stop when their shared limits are reached:
+    /// 256 file attempts, 8 MiB read, 100,000 entries and host patterns, 4,096
+    /// directory entries, 4,096 include patterns, or 4,000,000 glob work units.
+    /// Only regular files are read.
+    /// The entries collected before a limit was reached are returned.
     public static func load(path: String = SSHConfig.defaultPath) -> SSHConfig {
-        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
-            return SSHConfig(entries: [])
-        }
         var out: [Entry] = []
-        collectEntries(
-            text: text, baseDir: (path as NSString).deletingLastPathComponent,
-            depth: 0, into: &out)
+        var state = LoadState(bounded: true)
+        loadFile(path, baseDir: (path as NSString).deletingLastPathComponent,
+                 depth: 0, into: &out, state: &state)
         return SSHConfig(entries: out)
     }
 
-    /// Tolkar en config-text till poster, och expanderar `Include` INLINE på
-    /// den plats raden stod. Att inlina är inte en förenkling utan just vad
-    /// OpenSSH gör: en inkluderad fils `Host`-block gäller vidare efter
-    /// include-punkten, precis som om innehållet stått där direkt.
-    private static func collectEntries(
-        text: String, baseDir: String?, depth: Int, into out: inout [Entry]
+    // Count attempted reads as well as successful ones. Read from the opened
+    // regular file in bounded chunks, so its size cannot change between a size
+    // check and an unbounded read. Inodes also identify symlink and hard-link cycles.
+    private static func loadFile(
+        _ path: String, baseDir: String, depth: Int, into out: inout [Entry],
+        state: inout LoadState
     ) {
-        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        guard !state.exhausted else { return }
+        guard state.fileReads < maxFileReads else { state.exhausted = true; return }
+        state.fileReads += 1
+        let fd = open(path, O_RDONLY | O_NONBLOCK)
+        guard fd >= 0 else { return }
+        defer { close(fd) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else { return }
+        let identity = FileIdentity(device: UInt64(truncatingIfNeeded: info.st_dev), inode: UInt64(truncatingIfNeeded: info.st_ino))
+        guard !state.active.contains(identity) else { return }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = min(buffer.count, maxBytes - state.bytes + 1)
+            let n = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, count) }
+            if n < 0 {
+                if errno == EINTR { continue }
+                return
+            }
+            if n == 0 { break }
+            guard n <= maxBytes - state.bytes else { state.exhausted = true; return }
+            state.bytes += n
+            data.append(contentsOf: buffer.prefix(n))
+        }
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        state.active.insert(identity)
+        defer { state.active.remove(identity) }
+        collectEntries(text: text, baseDir: baseDir, depth: depth, into: &out, state: &state)
+    }
+
+    /// Includes are expanded inline, preserving first-value-wins ordering.
+    /// Disk loads stop at the shared budgets; text-only parsing remains unlimited.
+    private static func collectEntries(
+        text: String, baseDir: String?, depth: Int, into out: inout [Entry],
+        state: inout LoadState
+    ) {
+        var lineStart = text.startIndex
+        while lineStart < text.endIndex {
+            guard !state.exhausted else { return }
+            let lineEnd = text[lineStart...].firstIndex(where: { $0 == "\n" || $0 == "\r" }) ?? text.endIndex
+            let rawLine = text[lineStart..<lineEnd]
+            lineStart = lineEnd == text.endIndex ? lineEnd : text.index(after: lineEnd)
             guard let (key, value) = SSHConfig.tokenize(String(rawLine)) else { continue }
+            if key == "include" {
+                guard let baseDir, depth < maxIncludeDepth else { continue }
+                for included in resolveInclude(value, baseDir: baseDir, state: &state) {
+                    guard !state.exhausted else { return }
+                    loadFile(included, baseDir: baseDir, depth: depth + 1, into: &out, state: &state)
+                }
+                continue
+            }
+            if state.bounded {
+                guard state.entries < maxEntries else { state.exhausted = true; return }
+                state.entries += 1
+            }
             switch key {
             case "host":
-                out.append(.host(value.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)))
+                let patterns = value.split(
+                    maxSplits: state.bounded ? maxEntries : Int.max,
+                    whereSeparator: { $0 == " " || $0 == "\t" })
+                if state.bounded {
+                    guard patterns.count <= maxEntries - state.entries else { state.exhausted = true; return }
+                    state.entries += patterns.count
+                }
+                out.append(.host(patterns.map(String.init)))
             case "match":
                 out.append(.match(value))
-            case "include":
-                guard let baseDir, depth < maxIncludeDepth else { continue }
-                for included in resolveInclude(value, baseDir: baseDir) {
-                    guard let nested = try? String(contentsOfFile: included, encoding: .utf8)
-                    else { continue }
-                    collectEntries(text: nested, baseDir: baseDir, depth: depth + 1, into: &out)
-                }
             default:
                 out.append(.setting(key, value))
             }
         }
     }
 
-    /// Löser upp en `Include`-rads sökvägar till konkreta filer.
+    /// Resolves an `Include` line to concrete files. A line may list several
+    /// paths, each with `~` and/or wildcards; relative paths are resolved
+    /// against the root config's directory (OpenSSH uses `~/.ssh`, the same
+    /// directory in practice, but this also holds when the file lives elsewhere).
     ///
-    /// En rad kan ange flera sökvägar separerade med blanksteg, var och en med
-    /// `~` och/eller jokertecken. Relativa sökvägar räknas från katalogen
-    /// configfilen ligger i — OpenSSH säger `~/.ssh` för användarens config,
-    /// vilket är samma katalog i praktiken men blir rätt även när filen ligger
-    /// någon annanstans (t.ex. i ett test).
-    ///
-    /// Träffarna sorteras. OpenSSH läser glob-träffar i den ordning `glob(3)`
-    /// ger, alltså sorterad — och ordningen spelar roll, eftersom första
-    /// värdet vinner per nyckel. En saknad fil hoppas över i stället för att
-    /// fela som OpenSSH gör: alternativet vore att en enda kvarglömd rad
-    /// efter ett avinstallerat verktyg gör att INGA värdar alls läses.
-    private static func resolveInclude(_ value: String, baseDir: String) -> [String] {
+    /// Matches are sorted, as `glob(3)` returns them to OpenSSH, because the
+    /// first value per key wins. A missing file is skipped instead of failing as
+    /// OpenSSH does: otherwise one stale line left by an uninstalled tool would
+    /// stop every host from loading. Directory enumeration and glob matching
+    /// share the load's budgets.
+    private static func resolveInclude(_ value: String, baseDir: String, state: inout LoadState) -> [String] {
         var out: [String] = []
-        for raw in value.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init) {
-            let expanded = (raw as NSString).expandingTildeInPath
+        var cursor = value.startIndex
+        while cursor < value.endIndex {
+            while cursor < value.endIndex && (value[cursor] == " " || value[cursor] == "\t") {
+                cursor = value.index(after: cursor)
+            }
+            guard cursor < value.endIndex else { break }
+            guard state.includePatterns < maxIncludePatterns else { state.exhausted = true; return [] }
+            state.includePatterns += 1
+            let start = cursor
+            while cursor < value.endIndex && value[cursor] != " " && value[cursor] != "\t" {
+                cursor = value.index(after: cursor)
+            }
+            guard out.count < maxFileReads else { state.exhausted = true; return [] }
+            let expanded = (String(value[start..<cursor]) as NSString).expandingTildeInPath
             let full = (expanded as NSString).isAbsolutePath
-                ? expanded
-                : (baseDir as NSString).appendingPathComponent(expanded)
-
+                ? expanded : (baseDir as NSString).appendingPathComponent(expanded)
             guard expanded.contains("*") || expanded.contains("?") else {
                 out.append(full)
                 continue
             }
-
-            // Jokertecken hanteras bara i SISTA segmentet, som i OpenSSH:s egna
-            // exempel (`Include ~/.ssh/config.d/*`). Ett mönster mitt i
-            // sökvägen är sällsynt nog att inte vara värt en egen
-            // katalogtraversering.
             let dir = (full as NSString).deletingLastPathComponent
             let pattern = (full as NSString).lastPathComponent
-            guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir) else {
-                continue
+            guard let directory = opendir(dir) else { continue }
+            var names: [String] = []
+            let patternSize = pattern.utf8.count
+            while let entry = readdir(directory) {
+                state.directoryEntries += 1
+                if state.directoryEntries > maxDirectoryEntries { state.exhausted = true; break }
+                let nameCapacity = MemoryLayout.size(ofValue: entry.pointee.d_name)
+                let name = withUnsafePointer(to: &entry.pointee.d_name) {
+                    $0.withMemoryRebound(to: CChar.self, capacity: nameCapacity) {
+                        String(validatingUTF8: $0)
+                    }
+                }
+                guard let name, name != ".", name != ".." else { continue }
+                // A conservative bound on comparisons made by glob's backtracking.
+                let nameSize = name.utf8.count
+                guard patternSize <= (maxGlobWork - state.globWork) / max(1, nameSize) else {
+                    state.exhausted = true; break
+                }
+                state.globWork += patternSize * max(1, nameSize)
+                if glob(pattern, name) { names.append(name) }
             }
-            out += names
-                .filter { glob(pattern, $0) }
-                .sorted()
-                .map { (dir as NSString).appendingPathComponent($0) }
+            closedir(directory)
+            guard !state.exhausted, out.count + names.count <= maxFileReads else {
+                state.exhausted = true; return []
+            }
+            out += names.sorted().map { (dir as NSString).appendingPathComponent($0) }
         }
         return out
     }
