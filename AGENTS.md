@@ -1,8 +1,8 @@
-# AGENTS.md – bastion_apple
+# AGENTS.md – bastion-apple
 
 Bastion for Apple: the SSH client for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen.
 
-Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw.githubusercontent.com/pissmyran/.github/main/GOVERNANCE.md) and [BASTION.md](https://raw.githubusercontent.com/pissmyran/.github/main/BASTION.md).
+Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw.githubusercontent.com/Myrpisset/.github/main/GOVERNANCE.md) and [BASTION.md](https://raw.githubusercontent.com/Myrpisset/.github/main/BASTION.md).
 
 ## Read first
 
@@ -12,10 +12,23 @@ Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw
 
 ## Commands
 
-Build and test the Swift package (works on Linux and macOS):
+Build and test the Swift package (works on Linux and macOS). CI runs no build or tests, so this local run is the only test gate:
 
 ```bash
 swift build && swift test
+```
+
+Run a single test class, or a single test method (replace `testLastWriteWins` with the method you want):
+
+```bash
+swift test --filter SSHCoreTests.SyncEngineTests
+swift test --filter SSHCoreTests.SyncEngineTests/testLastWriteWins
+```
+
+Build the documentation (required when `docs/` or `zensical.toml` changes):
+
+```bash
+pip install --upgrade zensical && zensical build --strict
 ```
 
 Generate the Xcode project (macOS only):
@@ -28,16 +41,17 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 
 ## Rules
 
-- **No signing in the repository:** never add code signing, certificates, provisioning profiles or App Store keys.
+- **No signing secrets in the repository:** `App/project.yml` holds signing *settings* (team ID, signing style, provisioning profile names) and `App/fastlane/` fetches certificates with `match`. Never commit certificates, provisioning profiles, private keys, App Store Connect API keys or match passwords; they come from environment variables and the encrypted match repository.
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow `docs/sync-format.md`.
-- **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the dependency versions in `App/Package.swift` and passes them on. `App/Package.swift` never becomes app source.
+- **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
+- **Pull request titles follow Conventional Commits**; they decide the release version (see `docs/release.md`). Code, comments, documentation, commits and pull requests are written in English.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
 ## CodeRabbit configuration
 
 Keep `inheritance: true` in `.coderabbit.yaml`; shared settings belong in
-`pissmyran/coderabbit`. Local instructions cover Apple security boundaries,
+`Myrpisset/coderabbit`. Local instructions cover Apple security boundaries,
 platform availability, verification and shared sync compatibility. Preserve the
 explicit Bastion hub, Linux, Windows and Android links without assuming feature
 parity or repository access. Follow [docs/operations.md](docs/operations.md#coderabbit-configuration)
