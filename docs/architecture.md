@@ -54,6 +54,6 @@ Update a dependency in the manifest that actually owns it. Renovate opens the up
 
 ## Security boundary
 
-SSHCore owns host key verification and authentication. The user interface must never build shortcuts around the core's checks. Keys and passwords are stored in the keychain, never in files in the repo or in test data.
+SSHCore owns host key verification and authentication. The user interface must never build shortcuts around the core's checks. Keys and passwords are stored in the keychain, never in files in the repo or in test data. The exceptions are WireGuard profiles (`~/.bastion/wireguard.json`) and S3 connections (`~/.bastion/s3connections.json`), which hold private and secret keys in files: SSHCore writes them through `PrivateFile`, owner-only (0600, in a 0700 directory) from the moment they exist.
 
 Local files reach the remote side only through SSHCore's guarded readers: SFTP uploads (`SFTPUploadSource`) open each entry relative to its parent directory descriptor and refuse symbolic links and special files, so a path swapped during an upload cannot redirect the read.

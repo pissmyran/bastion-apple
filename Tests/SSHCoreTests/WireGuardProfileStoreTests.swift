@@ -1,9 +1,29 @@
 import XCTest
 @testable import SSHCore
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 
 final class WireGuardProfileStoreTests: XCTestCase {
-    private static let testPrivateKey = ProcessInfo.processInfo.environment["BASTION_TEST_WIREGUARD_PRIVATE_KEY"]
-        ?? "safe-test-private-key"
+    private func makeTemporaryDirectory() throws -> String {
+        var template = (NSTemporaryDirectory() + "bastion-wireguard-XXXXXX").utf8CString
+        guard template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress!) != nil }) else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let dir = template.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: dir)
+            guard let mode = attributes[.posixPermissions] as? NSNumber, mode.intValue & 0o777 == 0o700 else {
+                throw POSIXError(.EACCES)
+            }
+        } catch {
+            try? FileManager.default.removeItem(atPath: dir)
+            throw error
+        }
+        return dir
+    }
 
     private func makeConfig(privateKey: String) -> WireGuardConfig {
         var config = WireGuardConfig()
@@ -28,7 +48,7 @@ final class WireGuardProfileStoreTests: XCTestCase {
     }
 
     func testPersistAcrossInstances() throws {
-        let dir = NSTemporaryDirectory() + "bastion-wireguard-\(ProcessInfo.processInfo.processIdentifier)"
+        let dir = try makeTemporaryDirectory()
         let path = dir + "/wireguard.json"
         defer { try? FileManager.default.removeItem(atPath: dir) }
 
@@ -62,7 +82,7 @@ final class WireGuardProfileStoreTests: XCTestCase {
         let config = WireGuardConfig(text: text)
         let profile = WireGuardProfile(name: "Hemma", config: config)
 
-        let dir = NSTemporaryDirectory() + "bastion-wireguard-roundtrip-\(ProcessInfo.processInfo.processIdentifier)"
+        let dir = try makeTemporaryDirectory()
         let path = dir + "/wireguard.json"
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let s1 = WireGuardProfileStore(path: path)
@@ -70,7 +90,30 @@ final class WireGuardProfileStoreTests: XCTestCase {
 
         let s2 = WireGuardProfileStore(path: path)
         let reloaded = s2.get(profile.id)
-        XCTAssertEqual(reloaded?.config, config)
-        XCTAssertEqual(reloaded?.config.rendered(), config.rendered())
+        XCTAssertTrue(reloaded?.config == config)
+        XCTAssertTrue(reloaded?.config.rendered() == config.rendered())
+    }
+
+    func testPersistCreatesPrivateFileAndReplacesInsecureFile() throws {
+        let dir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let sharedDir = dir + "/shared"
+        try FileManager.default.createDirectory(atPath: sharedDir, withIntermediateDirectories: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: sharedDir)
+        let path = sharedDir + "/wireguard.json"
+
+        let store = WireGuardProfileStore(path: path)
+        let profile = WireGuardProfile(name: "Home", config: makeConfig(privateKey: "test-key"))
+        store.upsert(profile)
+        func permissions() throws -> Int {
+            let attributes = try FileManager.default.attributesOfItem(atPath: path)
+            return try XCTUnwrap(attributes[.posixPermissions] as? NSNumber).intValue & 0o777
+        }
+        XCTAssertEqual(try permissions(), 0o600)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path)
+        store.upsert(profile)
+        XCTAssertEqual(try permissions(), 0o600)
+        XCTAssertNotNil(WireGuardProfileStore(path: path).get(profile.id))
     }
 }

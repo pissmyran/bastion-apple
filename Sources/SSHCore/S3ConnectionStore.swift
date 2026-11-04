@@ -95,7 +95,8 @@ public final class S3ConnectionStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(Array(byID.values).sorted { $0.name < $1.name }) {
-            try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            // Holds secret access keys: never readable by others, not even briefly.
+            try? PrivateFile.write(data, to: path)
         }
     }
 }
