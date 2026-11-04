@@ -56,4 +56,6 @@ Update a dependency in the manifest that actually owns it. Renovate opens the up
 
 SSHCore owns host key verification and authentication. The user interface must never build shortcuts around the core's checks. Keys and passwords are stored in the keychain, never in files in the repo or in test data.
 
+Key deployment (`KeyManagement`) appends exactly one `authorized_keys` record: it rejects empty keys and keys containing CR, LF or NUL before building the remote command, and generated public key lines drop comments containing those characters.
+
 Local files reach the remote side only through SSHCore's guarded readers: SFTP uploads (`SFTPUploadSource`) open each entry relative to its parent directory descriptor and refuse symbolic links and special files, so a path swapped during an upload cannot redirect the read.
