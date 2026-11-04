@@ -687,7 +687,7 @@ struct LoopbackServer {
         password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
         realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
         trackWindowChanges: Bool = false, silenceable: Bool = false,
-        withholdCancelReply: Bool = false
+        withholdCancelReply: Bool = false, globalRequestDelegate: GlobalRequestDelegate? = nil
     ) throws -> LoopbackServer {
         // Real execution must not be reachable using a known test password or key.
         precondition(!realExec || (password == nil && authorizedPublicKey == nil))
@@ -713,7 +713,8 @@ struct LoopbackServer {
                         role: .server(.init(
                             hostKeys: [hostKey],
                             userAuthDelegate: ServerAuth(password: password, authorizedPublicKey: allowedKey),
-                            globalRequestDelegate: ServerRemoteForwardingDelegate(channel: channel, withheldCancel: withheldCancel))),
+                            globalRequestDelegate: globalRequestDelegate
+                                ?? ServerRemoteForwardingDelegate(channel: channel, withheldCancel: withheldCancel))),
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: { child, channelType in
                             switch channelType {
