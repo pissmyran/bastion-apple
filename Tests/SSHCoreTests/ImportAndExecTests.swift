@@ -47,7 +47,7 @@ final class ImportAndExecTests: XCTestCase {
 
     func testDockerExecShellCommandValidatedAndFormed() throws {
         XCTAssertEqual(try DockerService.execShellCommand("plex"),
-                       "docker exec -it plex sh -c 'command -v bash >/dev/null && exec bash || exec sh'")
+                       "docker exec -it 'plex' sh -c 'command -v bash >/dev/null && exec bash || exec sh'")
         XCTAssertThrowsError(try DockerService.execShellCommand("plex; rm -rf /"))
     }
 }
