@@ -34,6 +34,12 @@ Test the GUI prototype (required when `docs/prototype/bastion-gui.html` changes;
 node --test Tests/Prototype/terminal.test.js
 ```
 
+Test the tvOS OAuth token store outside Xcode (compiles `App/TVApp/TVOAuthTokenStore.swift` with an in-memory Keychain):
+
+```bash
+bash Tests/TVAppTests/run-token-store-tests.sh
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash

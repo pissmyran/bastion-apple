@@ -56,25 +56,23 @@ private struct OAuthTokenRefreshError: Error, LocalizedError {
 /// ett id att nyckla på). `OAuthTokenResponse`/`StoredOAuthToken` återanvänds
 /// direkt från SSHCore (redan plattformsneutrala, delade med App/).
 enum TVOAuthTokenStore {
-    // Serialiserar läs-förnya-spara-sekvensen i validAccessToken PER
-    // PROVIDER — utan detta kan två samtidiga anrop för SAMMA provider
-    // (t.ex. push+pull som racear under en synk) båda se samma utgångna
-    // token och skicka samma refresh_token till servern, vilket loggar ut
-    // användaren i onödan om providern roterar refresh-tokens (cubic/devin-
-    // fynd, PR #196). Ett enda globalt lås över ALLA providers löste det
-    // men blockerade i onödan en frisk OneDrive-förnyelse bakom en hängande
-    // Google Drive-förnyelse (cubic P3, andra granskningsrundan) — nyckla
-    // låsen per provider-id istället. `locksLock` skyddar bara själva
-    // dictionary-åtkomsten (kort, ingen nätverkstrafik under den).
-    private static let locksLock = NSLock()
-    private static var providerLocks: [String: NSLock] = [:]
+    // Refreshes are serialized per provider, while the state lock coordinates
+    // Keychain mutations without holding a lock across network requests.
+    private final class ProviderState {
+        let refreshLock = NSLock()
+        let stateLock = NSLock()
+        var generation = UUID()
+    }
 
-    private static func lock(for providerID: String) -> NSLock {
-        locksLock.lock()
-        defer { locksLock.unlock() }
-        if let existing = providerLocks[providerID] { return existing }
-        let new = NSLock()
-        providerLocks[providerID] = new
+    private static let statesLock = NSLock()
+    private static var providerStates: [String: ProviderState] = [:]
+
+    private static func state(for providerID: String) -> ProviderState {
+        statesLock.lock()
+        defer { statesLock.unlock() }
+        if let existing = providerStates[providerID] { return existing }
+        let new = ProviderState()
+        providerStates[providerID] = new
         return new
     }
 
@@ -105,10 +103,23 @@ enum TVOAuthTokenStore {
     // Keychain om raderingen misslyckas.
     @discardableResult
     static func logout(_ providerID: String) -> Bool {
-        Keychain.delete(keychainKey(providerID))
+        let state = state(for: providerID)
+        state.stateLock.lock()
+        defer { state.stateLock.unlock() }
+        state.generation = UUID()
+        return Keychain.delete(keychainKey(providerID))
     }
 
     static func save(_ token: StoredOAuthToken, for providerID: String) throws {
+        let state = state(for: providerID)
+        state.stateLock.lock()
+        defer { state.stateLock.unlock() }
+        state.generation = UUID()
+        try saveLocked(token, for: providerID)
+    }
+
+    // Caller holds the provider's state lock.
+    private static func saveLocked(_ token: StoredOAuthToken, for providerID: String) throws {
         let data = try JSONEncoder().encode(token)
         guard Keychain.set(String(decoding: data, as: UTF8.self), for: keychainKey(providerID)) else {
             throw OAuthError.keychainWriteFailed
@@ -123,31 +134,43 @@ enum TVOAuthTokenStore {
     /// Hämtar en giltig access token, förnyar tyst via `refresh_token` om
     /// den gått ut. Blockerande — matchar `SyncProvider`s synkrona gränssnitt.
     static func validAccessToken(for providerID: String, tokenEndpoint: URL, clientID: String) throws -> String {
-        let providerLock = lock(for: providerID)
-        providerLock.lock()
-        defer { providerLock.unlock() }
-        guard let token = load(for: providerID) else { throw OAuthError.notLoggedIn }
-        guard token.isExpired else { return token.accessToken }
-        // En utgången token UTAN refresh-token är oanvändbar — returnera den
-        // ALDRIG som "giltig" (cubic P2, skulle annars skicka en känt
-        // utgången bearer-token istället för att kräva ny inloggning).
-        guard let refreshToken = token.refreshToken else {
-            logout(providerID)
+        let state = state(for: providerID)
+        state.refreshLock.lock()
+        defer { state.refreshLock.unlock() }
+
+        state.stateLock.lock()
+        guard let token = load(for: providerID) else {
+            state.stateLock.unlock()
             throw OAuthError.notLoggedIn
         }
+        guard token.isExpired else {
+            state.stateLock.unlock()
+            return token.accessToken
+        }
+        guard let refreshToken = token.refreshToken else {
+            state.generation = UUID()
+            _ = Keychain.delete(keychainKey(providerID))
+            state.stateLock.unlock()
+            throw OAuthError.notLoggedIn
+        }
+        let generation = state.generation
+        state.stateLock.unlock()
+
         do {
             let refreshed = try refresh(refreshToken, tokenEndpoint: tokenEndpoint, clientID: clientID)
-            try save(refreshed, for: providerID)
+            state.stateLock.lock()
+            defer { state.stateLock.unlock() }
+            guard state.generation == generation else { throw OAuthError.notLoggedIn }
+            try saveLocked(refreshed, for: providerID)
             return refreshed.accessToken
         } catch let error as OAuthTokenRefreshError where error.isInvalidGrant {
-            // Bara `invalid_grant` betyder att REFRESH-TOKEN är permanent
-            // ogiltig (återkallad/utgången av användaren) — logga ut och
-            // kräv ny inloggning. `invalid_client` (fel/roterat client-ID)
-            // är ett KONFIGURATIONSFEL, inte något en omlogging löser — att
-            // radera token där bara döljer det riktiga problemet bakom en
-            // missvisande "logga in igen"-uppmaning (cubic P2, andra
-            // granskningsrundan: mitt första utkast slog ihop de två felen).
-            logout(providerID)
+            // A stale failure must not delete a newer login.
+            state.stateLock.lock()
+            defer { state.stateLock.unlock() }
+            if state.generation == generation {
+                state.generation = UUID()
+                _ = Keychain.delete(keychainKey(providerID))
+            }
             throw OAuthError.notLoggedIn
         }
     }
