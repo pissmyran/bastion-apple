@@ -96,14 +96,16 @@ final class ExternalBinaryFetcherTests: XCTestCase {
         }
 
         // Den felaktiga nedladdningen ska ALDRIG ha skrivits till disk.
-        XCTAssertFalse(FileManager.default.fileExists(atPath: cacheDir.appendingPathComponent("sample").path))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: cacheDir.appendingPathComponent(wrongChecksum).appendingPathComponent("sample").path))
     }
 
     func testCorruptedCacheEntryIsRedownloaded() async throws {
         let cacheDir = freshCacheDir()
         defer { try? FileManager.default.removeItem(at: cacheDir) }
-        try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-        let destination = cacheDir.appendingPathComponent("sample")
+        let destination = cacheDir.appendingPathComponent(sampleSHA256).appendingPathComponent("sample")
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("korrupt-skräp, inte den riktiga filen".utf8).write(to: destination)
 
         let path = try await fetchSample(cacheDir: cacheDir)
@@ -111,4 +113,138 @@ final class ExternalBinaryFetcherTests: XCTestCase {
         let data = try Data(contentsOf: path)
         XCTAssertEqual(ExternalBinaryFetcher.sha256Hex(data), sampleSHA256)
     }
+}
+
+// These security checks do not require network access.
+final class ExternalBinaryFetcherPathTests: XCTestCase {
+    func testInvalidNamesCannotRemoveFilesOutsideCache() async throws {
+        let names = ["", ".", "..", "../victim", "nested/file", "/absolute", "nested\\file", "bad\0name"]
+        for name in names {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let cache = root.appendingPathComponent("cache")
+            let victim = root.appendingPathComponent("victim")
+            try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+            try Data("keep".utf8).write(to: victim)
+            do {
+                _ = try await ExternalBinaryFetcher.fetch(
+                    url: URL(string: "https://example.com/binary")!, expectedSHA256: "irrelevant",
+                    cacheDir: cache, binaryName: name)
+                XCTFail("Accepted invalid name: \(name.debugDescription)")
+            } catch ExternalBinaryError.cacheWriteFailed {
+                // Invalid names must be rejected before any filesystem access.
+            } catch {
+                XCTFail("Unexpected error for \(name.debugDescription): \(error)")
+            }
+            XCTAssertEqual(try? Data(contentsOf: victim), Data("keep".utf8), name.debugDescription)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: cache.path), name.debugDescription)
+            try? FileManager.default.removeItem(at: root)
+        }
+    }
+
+    func testSymlinkIsNotAcceptedAsCacheHit() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("cache")
+        let target = root.appendingPathComponent("outside")
+        let destination = cache.appendingPathComponent(ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data))
+            .appendingPathComponent("sample")
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try StubBinaryURLProtocol.data.write(to: target)
+        try FileManager.default.createSymbolicLink(at: destination, withDestinationURL: target)
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubBinaryURLProtocol.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let result = try await ExternalBinaryFetcher.fetch(
+            url: URL(string: "https://example.com/binary")!,
+            expectedSHA256: ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data),
+            cacheDir: cache, binaryName: "sample", session: session)
+
+        XCTAssertEqual(result, destination)
+        XCTAssertEqual(try Data(contentsOf: target), StubBinaryURLProtocol.data)
+        XCTAssertEqual(try Data(contentsOf: destination), StubBinaryURLProtocol.data)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: destination.path)[.type] as? FileAttributeType, .typeRegular)
+    }
+
+    private func stubSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubBinaryURLProtocol.self]
+        return URLSession(configuration: config)
+    }
+
+    func testInvalidChecksumsAreRejectedBeforeAnyFilesystemAccess() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        for checksum in ["irrelevant", String(repeating: "a", count: 63), "../" + String(repeating: "a", count: 61),
+                         String(repeating: "g", count: 64)] {
+            do {
+                _ = try await ExternalBinaryFetcher.fetch(
+                    url: URL(string: "https://example.com/binary")!, expectedSHA256: checksum,
+                    cacheDir: cache, binaryName: "sample")
+                XCTFail("Accepted invalid checksum \(checksum)")
+            } catch ExternalBinaryError.cacheWriteFailed {
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+    }
+
+    func testOtherVersionsUnderTheSameNameAreNotReplaced() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let first = try await ExternalBinaryFetcher.fetch(
+            url: URL(string: "https://example.com/binary")!,
+            expectedSHA256: ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data),
+            cacheDir: cache, binaryName: "sample", session: session)
+        let second = try await ExternalBinaryFetcher.fetch(
+            url: URL(string: "https://example.com/other")!,
+            expectedSHA256: ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.otherData),
+            cacheDir: cache, binaryName: "sample", session: session)
+
+        // The first caller's verified file must still hold the bytes it checked.
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(try Data(contentsOf: first), StubBinaryURLProtocol.data)
+        XCTAssertEqual(try Data(contentsOf: second), StubBinaryURLProtocol.otherData)
+    }
+
+    func testConcurrentFetchesOfTheSameChecksumAllSucceed() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let checksum = ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data)
+        let results = try await withThrowingTaskGroup(of: URL.self) { group in
+            for _ in 0..<16 {
+                group.addTask {
+                    try await ExternalBinaryFetcher.fetch(
+                        url: URL(string: "https://example.com/binary")!, expectedSHA256: checksum,
+                        cacheDir: cache, binaryName: "sample", session: session)
+                }
+            }
+            return try await group.reduce(into: Set<URL>()) { $0.insert($1) }
+        }
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(try Data(contentsOf: results.first!), StubBinaryURLProtocol.data)
+    }
+}
+
+private final class StubBinaryURLProtocol: URLProtocol {
+    static let data = Data("verified binary".utf8)
+    /// Served for URLs ending in `/other`: a second version under the same name.
+    static let otherData = Data("another verified version".utf8)
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: request.url!.lastPathComponent == "other" ? Self.otherData : Self.data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
