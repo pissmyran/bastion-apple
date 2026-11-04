@@ -55,9 +55,9 @@ final class ArchiveOperationsTests: XCTestCase {
     }
 
     func testExtractZipCommand() {
-        XCTAssertEqual(
-            ArchiveOperations.extractZipCommand(archiveName: "out.zip", in: "/home/x"),
-            "cd '/home/x' && unzip -o -q './out.zip'")
+        let command = ArchiveOperations.extractZipCommand(archiveName: "out.zip", in: "/home/x")
+        XCTAssertTrue(command.hasPrefix("cd '/home/x' && python3 -c "))
+        XCTAssertTrue(command.hasSuffix(" './out.zip'"))
     }
 
     // MARK: - Riktig körning mot en RIKTIG tar/zip (LoopbackServer realExec: true)
@@ -169,4 +169,104 @@ final class ArchiveOperationsTests: XCTestCase {
 
         await session.close()
     }
+    func testZipExtractionRejectsEscapesAndDoesNotFollowLinks() async throws {
+        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        defer { server.shutdown() }
+        let session = try await connectedRealExecSession(server)
+
+        let fixture = #"""
+        import os, stat, sys, zipfile
+        root = sys.argv[1]
+        os.mkdir(root + '/dest')
+        os.mkdir(root + '/outside')
+        with open(root + '/outside/victim', 'w') as f: f.write('original')
+        os.symlink(root + '/outside', root + '/dest/link')
+        os.symlink(root + '/outside/victim', root + '/dest/filelink')
+        os.link(root + '/outside/victim', root + '/dest/hardlink')
+        with open(root + '/dest/normal', 'w') as f: f.write('old')
+        archives = {
+            'ancestor.zip': ('link/victim', 'attack'),
+            'filelink.zip': ('filelink', 'attack'),
+            'traversal.zip': ('../outside/victim', 'attack'),
+            'absolute.zip': (root + '/outside/victim', 'attack'),
+            'hardlink.zip': ('hardlink', 'safe replacement'),
+            'normal.zip': ('normal', 'new'),
+        }
+        for filename, (name, data) in archives.items():
+            with zipfile.ZipFile(root + '/dest/' + filename, 'w') as archive:
+                archive.writestr(name, data)
+        with zipfile.ZipFile(root + "/dest/-nested 'name.zip", 'w') as archive:
+            archive.writestr('folder/', '')
+            archive.writestr("folder/it's safe", 'nested data')
+        with zipfile.ZipFile(root + '/dest/symlink.zip', 'w') as archive:
+            archive.writestr('would-write', 'not written')
+            link = zipfile.ZipInfo('archive-link')
+            link.create_system = 3
+            link.external_attr = (stat.S_IFLNK | 0o777) << 16
+            archive.writestr(link, '../outside')
+        """#
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["python3", "-c", fixture, server.sftpRoot]
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+
+        let dest = server.sftpRoot + "/dest"
+        for archive in ["ancestor.zip", "filelink.zip", "traversal.zip", "absolute.zip", "symlink.zip"] {
+            do {
+                try await ArchiveOperations.extractZip(archiveName: archive, in: dest, over: session)
+                XCTFail("Expected extraction of \(archive) to fail")
+            } catch { }
+            XCTAssertEqual(try String(contentsOfFile: server.sftpRoot + "/outside/victim", encoding: .utf8), "original")
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dest + "/would-write"))
+
+        try await ArchiveOperations.extractZip(archiveName: "hardlink.zip", in: dest, over: session)
+        XCTAssertEqual(try String(contentsOfFile: dest + "/hardlink", encoding: .utf8), "safe replacement")
+        XCTAssertEqual(try String(contentsOfFile: server.sftpRoot + "/outside/victim", encoding: .utf8), "original")
+        try await ArchiveOperations.extractZip(archiveName: "normal.zip", in: dest, over: session)
+        XCTAssertEqual(try String(contentsOfFile: dest + "/normal", encoding: .utf8), "new")
+        try await ArchiveOperations.extractZip(archiveName: "-nested 'name.zip", in: dest, over: session)
+        XCTAssertEqual(try String(contentsOfFile: dest + "/folder/it's safe", encoding: .utf8), "nested data")
+        await session.close()
+    }
+
+    func testZipExtractionRefusesArchivesLargerThanFreeSpace() async throws {
+        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        defer { server.shutdown() }
+        let session = try await connectedRealExecSession(server)
+
+        // 1,000 members whose central-directory sizes each claim almost 4 GiB.
+        let fixture = #"""
+        import os, struct, sys, zipfile
+        root = sys.argv[1]
+        os.mkdir(root + '/dest')
+        path = root + '/dest/bomb.zip'
+        with zipfile.ZipFile(path, 'w') as archive:
+            for i in range(1000):
+                archive.writestr('member-%d' % i, 'x')
+        data = bytearray(open(path, 'rb').read())
+        offset = data.find(b'PK\x01\x02')
+        while offset != -1:
+            struct.pack_into('<I', data, offset + 24, 0xFFFFFFF0)
+            offset = data.find(b'PK\x01\x02', offset + 4)
+        open(path, 'wb').write(data)
+        """#
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["python3", "-c", fixture, server.sftpRoot]
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+
+        let dest = server.sftpRoot + "/dest"
+        do {
+            try await ArchiveOperations.extractZip(archiveName: "bomb.zip", in: dest, over: session)
+            XCTFail("Expected extraction to fail for lack of space")
+        } catch { }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dest + "/member-0"))
+        await session.close()
+    }
+
 }

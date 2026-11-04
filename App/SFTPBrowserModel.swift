@@ -238,7 +238,10 @@ final class SFTPBrowserModel: ObservableObject {
             }
             await refresh()
         } catch {
-            errorMessage = "\(error)"
+            // Extraction can fail after some members are written; show them.
+            let extractError = "\(error)"
+            await refresh()
+            errorMessage = extractError
         }
     }
 

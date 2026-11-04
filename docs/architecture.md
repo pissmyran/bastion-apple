@@ -57,3 +57,5 @@ Update a dependency in the manifest that actually owns it. Renovate opens the up
 SSHCore owns host key verification and authentication. The user interface must never build shortcuts around the core's checks. Keys and passwords are stored in the keychain, never in files in the repo or in test data.
 
 Local files reach the remote side only through SSHCore's guarded readers: SFTP uploads (`SFTPUploadSource`) open each entry relative to its parent directory descriptor and refuse symbolic links and special files, so a path swapped during an upload cannot redirect the read.
+
+ZIP archives are extracted on the server by a Python 3 script (`ArchiveOperations.extractZipCommand`) instead of `unzip`: it rejects absolute paths, `..`, symbolic links and special files, refuses archives whose declared size exceeds the free space, and writes through directory descriptors so existing links in the destination cannot redirect writes. The server therefore needs Python 3 to extract ZIP files.
