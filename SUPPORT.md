@@ -6,7 +6,7 @@ Use Discussions in the affected repository for questions about how to use Bastio
 
 ## Bugs and requests
 
-Open an issue in the affected repository when you can describe a reproducible bug or a concrete request. If it concerns every platform, open it in the [Bastion hub](https://github.com/pissmyran/bastion).
+Open an issue in the affected repository when you can describe a reproducible bug or a concrete request. If it concerns every platform, open it in the [Bastion hub](https://github.com/Myrpisset/bastion).
 
 ## Security problems
 

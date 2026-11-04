@@ -206,8 +206,8 @@ knowledge_base:
     enabled: true
     filePatterns:
     - '**/AGENTS.md'
-    - pissmyran/.github:GOVERNANCE.md
-    - pissmyran/.github:BASTION.md
+    - Myrpisset/.github:GOVERNANCE.md
+    - Myrpisset/.github:BASTION.md
     - files: docs/architecture.md
       applyTo: Sources/**,App/**,Package.swift
     - files: docs/operations.md
@@ -215,21 +215,21 @@ knowledge_base:
     - files: docs/sync-format.md
       applyTo: Sources/SSHCore/**,Tests/fixtures/**
   linked_repositories:
-  - repository: pissmyran/bastion
+  - repository: Myrpisset/bastion
     instructions: |
       Bastion hub and shared documentation.
       Check user-facing documentation affected by Apple behavior changes.
-  - repository: pissmyran/bastion_linux
+  - repository: Myrpisset/bastion-linux
     instructions: |
       Linux client and consumer of Apple's sync format.
       Compare affected readers and fixture copies for compatibility.
       Do not assume identical platform features.
-  - repository: pissmyran/bastion_windows
+  - repository: Myrpisset/bastion-windows
     instructions: |
       Windows client and consumer of Apple's sync format.
       Compare affected readers and fixture copies for compatibility.
       Do not assume identical platform features.
-  - repository: pissmyran/bastion_android
+  - repository: Myrpisset/bastion-android
     instructions: |
       Android client in the Bastion platform family.
       Check affected sync interoperability where implemented.

@@ -1,8 +1,11 @@
-# XcodeGen-spec → genererar Bastion.xcodeproj. Kör på Mac:
+# XcodeGen spec for Bastion.xcodeproj. Do not run xcodegen on this file
+# directly; on a Mac run:
 #   brew install xcodegen
-#   cd App && xcodegen generate && open Bastion.xcodeproj
-# DEVELOPMENT_TEAM är redan satt nedan (S6ZR2VU68T) — automatisk signering
-# fungerar direkt, både lokalt i Xcode och i testflight.yml-workflowet.
+#   sh App/generate-project.sh && open App/Bastion.xcodeproj
+# The script generates from project.dependencies.yml, which includes this
+# file and pins SwiftTerm to the exact version in App/Package.swift.
+# Signing is manual: DEVELOPMENT_TEAM and the provisioning profile names are
+# set per target below; certificates and profiles come from fastlane match.
 name: Bastion
 options:
   bundleIdPrefix: se.denied
