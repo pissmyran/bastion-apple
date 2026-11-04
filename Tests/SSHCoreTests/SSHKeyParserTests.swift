@@ -129,6 +129,66 @@ final class SSHKeyParserTests: XCTestCase {
         XCTAssertNoThrow(try P256.Signing.PrivateKey(rawRepresentation: scalar))
     }
 
+    // Construct only the fields consumed by the parser, so each test can
+    // control the wire encoding of the private mpint independently.
+    private func ecdsaPEM(curve: String, scalar: [UInt8]) -> String {
+        func u32(_ value: Int) -> [UInt8] {
+            let n = UInt32(value)
+            return [UInt8((n >> 24) & 0xff), UInt8((n >> 16) & 0xff),
+                    UInt8((n >> 8) & 0xff), UInt8(n & 0xff)]
+        }
+        func string(_ bytes: [UInt8]) -> [UInt8] { u32(bytes.count) + bytes }
+        let type = Array("ecdsa-sha2-\(curve)".utf8)
+        let privateSection = u32(1) + u32(1) + string(type) + string(Array(curve.utf8))
+            + string([]) + string(scalar)
+        let document = Array("openssh-key-v1\0".utf8) + string(Array("none".utf8))
+            + string(Array("none".utf8)) + string([]) + u32(1) + string([]) + string(privateSection)
+        return Self.armoredPEM(labelParts: Self.openSSHLabelParts, body: Data(document).base64EncodedString())
+    }
+
+    func testEcdsaScalarNormalizationForAllCurves() throws {
+        for (name, curve, length) in [("nistp256", ECDSACurve.p256, 32),
+                                      ("nistp384", .p384, 48), ("nistp521", .p521, 66)] {
+            let fullWidth: [UInt8] = [1] + Array(repeating: 0, count: length - 1)
+            for (encoded, expected) in [([UInt8(1)], [UInt8(1)]),
+                                        ([0, 0x80], [0x80]),
+                                        (fullWidth, fullWidth)] {
+                guard case .ecdsa(let parsedCurve, let scalar) = try OpenSSHPrivateKey.parse(
+                    ecdsaPEM(curve: name, scalar: encoded)) else {
+                    return XCTFail("Expected ECDSA for \(name)")
+                }
+                XCTAssertEqual(parsedCurve, curve)
+                XCTAssertEqual(scalar, Data(Array(repeating: 0, count: length - expected.count) + expected))
+            }
+            if length != 66 {
+                let magnitude: [UInt8] = [0x80] + Array(repeating: 0, count: length - 1)
+                guard case .ecdsa(_, let scalar) = try OpenSSHPrivateKey.parse(
+                    ecdsaPEM(curve: name, scalar: [0] + magnitude)) else {
+                    return XCTFail("Expected ECDSA for \(name)")
+                }
+                XCTAssertEqual(scalar, Data(magnitude))
+            }
+        }
+    }
+
+    func testRejectsMalformedEcdsaScalarEncodings() {
+        for (name, length) in [("nistp256", 32), ("nistp384", 48), ("nistp521", 66)] {
+            let malformed: [[UInt8]] = [
+                [], [0], [0, 1], [0, 0, 0x80], // zero and redundant padding
+                [0x80], [0xff], // negative mpints
+                [0] + Array(repeating: 1, count: length),
+                [1] + Array(repeating: 0, count: length),
+                [0, 0x80] + Array(repeating: 0, count: length),
+                Array(repeating: 0, count: 1_000_000),
+            ]
+            for encoded in malformed {
+                XCTAssertThrowsError(try OpenSSHPrivateKey.parse(ecdsaPEM(curve: name, scalar: encoded))) { error in
+                    XCTAssertEqual(error as? SSHKeyError, .malformed, "curve \(name), length \(encoded.count)")
+                }
+            }
+        }
+    }
+
     /// RSA är den typ som faktiskt inte hanteras (medvetet, se ROADMAP.md
     /// "Uppskjutet med avsikt"). Felet ska säga VILKEN typ det var — utan
     /// det står användaren med en nyckel som inte fungerar och ingen
