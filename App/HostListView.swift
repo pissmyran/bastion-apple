@@ -27,8 +27,11 @@ final class HostListModel: ObservableObject {
     }
 
     @discardableResult
-    func importConfig(_ text: String) -> Int {
-        let n = store.importSSHConfig(text).count
+    func importConfig(_ text: String) async -> Int {
+        let store = store
+        let n = await Task.detached(priority: .userInitiated) {
+            store.importSSHConfig(text).count
+        }.value
         reload()
         return n
     }
@@ -206,7 +209,7 @@ struct HostListView: View {
                 SyncSettingsView(syncNow: { await model.syncNow() })
             }
             .sheet(isPresented: $showImport) {
-                ImportConfigView(onImport: { model.importConfig($0) })
+                ImportConfigView(onImport: { await model.importConfig($0) })
             }
             .sheet(isPresented: $showAppLock) {
                 AppLockSettingsView()
