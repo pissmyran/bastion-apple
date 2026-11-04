@@ -28,6 +28,12 @@ Run a single test method (replace `testLastWriteWins` with the method you want):
 swift test --filter SSHCoreTests.SyncEngineTests/testLastWriteWins
 ```
 
+Test the GUI prototype (required when `docs/prototype/bastion-gui.html` changes; needs Node.js):
+
+```bash
+node --test Tests/Prototype/terminal.test.js
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
@@ -68,6 +74,7 @@ The password is read from `BASTION_PASSWORD` (otherwise from stdin). An Ed25519 
 | `Sources/bastion-cli/` | Command-line tool on top of SSHCore |
 | `Tests/SSHCoreTests/` | Tests for SSHCore |
 | `Tests/fixtures/` | Wire-format fixtures shared with the other platforms |
+| `Tests/Prototype/` | Node tests for the GUI prototype in `docs/prototype/` |
 | `App/` | The iOS, iPadOS and macOS app, the XcodeGen specs and fastlane |
 | `App/TVApp/` | The tvOS app |
 | `Package.swift` | The Swift package with SSHCore and bastion-cli |
