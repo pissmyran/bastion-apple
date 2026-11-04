@@ -10,11 +10,18 @@ import NIOConcurrencyHelpers
 // och svarar på exec-förfrågningar med "ran: <kommando>\n" + exit 0.
 
 final class ServerAuth: NIOSSHServerUserAuthenticationDelegate {
-    let password: String
-    init(password: String) { self.password = password }
+    let password: String?
+    let authorizedPublicKey: NIOSSHPublicKey?
+    init(password: String?, authorizedPublicKey: NIOSSHPublicKey?) {
+        self.password = password
+        self.authorizedPublicKey = authorizedPublicKey
+    }
 
     var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods {
-        [.password, .publicKey]
+        var methods: NIOSSHAvailableUserAuthenticationMethods = []
+        if password != nil { methods.insert(.password) }
+        if authorizedPublicKey != nil { methods.insert(.publicKey) }
+        return methods
     }
 
     func requestReceived(
@@ -23,10 +30,9 @@ final class ServerAuth: NIOSSHServerUserAuthenticationDelegate {
     ) {
         switch request.request {
         case .password(let p):
-            responsePromise.succeed(p.password == password ? .success : .failure)
-        case .publicKey:
-            // NIOSSH har redan verifierat signaturen; testservern godtar nyckeln.
-            responsePromise.succeed(.success)
+            responsePromise.succeed(password != nil && p.password == password ? .success : .failure)
+        case .publicKey(let key):
+            responsePromise.succeed(key.publicKey == authorizedPublicKey ? .success : .failure)
         default:
             responsePromise.succeed(.failure)
         }
@@ -57,10 +63,9 @@ final class ServerExecHandler: ChannelDuplexHandler, RemovableChannelHandler {
     /// "ran: <kommando>\n"-ekot, vad de flesta exec-tester (`SSHCoreTests`,
     /// `KeyParserTests`, `KnownHostsTests`, `ProxyJumpTests` m.fl.) redan
     /// bygger på och inte ska rubbas. `true` — kör kommandot GENUINT via
-    /// `Process` (`/bin/sh -c`) med `sftpRoot` som arbetskatalog, samma
-    /// sandlåda `ServerSFTPHandler` redan använder — krävs för att bevisa
-    /// t.ex. `tar`/`zip`-arkivoperationer på RIKTIGA filer, inte bara att
-    /// rätt kommandosträng skickades.
+    /// `Process` (`/bin/sh -c`) with `sftpRoot` as its working directory.
+    /// This is not a sandbox: commands run with the test process's privileges.
+    /// A per-instance client key protects real tar/zip operations on real files.
     init(
         sftpRoot: String, realExec: Bool = false,
         observedWindowChanges: NIOLockedValueBox<[(cols: Int, rows: Int)]>? = nil,
@@ -598,6 +603,8 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
 struct LoopbackServer {
     let group: MultiThreadedEventLoopGroup
     let channel: Channel
+    /// A fresh credential for real execution, never shared between server instances.
+    let realExecAuth: SSHAuth?
     /// Eget temp-directory per server-instans — SFTP-testerna läser/skriver
     /// riktiga filer här, aldrig i den delade systemtemp-mappen direkt.
     let sftpRoot: String
@@ -622,11 +629,16 @@ struct LoopbackServer {
     /// låta `observedWindowChanges` faktiskt samla in fönsterändringar
     /// (t.ex. `SSHShell.startKeepAlive`-tester).
     static func start(
-        password: String, realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
+        password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
+        realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
         trackWindowChanges: Bool = false, silenceable: Bool = false
     ) throws -> LoopbackServer {
+        // Real execution must not be reachable using a known test password or key.
+        precondition(!realExec || (password == nil && authorizedPublicKey == nil))
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let hostKey = NIOSSHPrivateKey(ed25519Key: .init())
+        let clientKey = realExec ? Curve25519.Signing.PrivateKey() : nil
+        let allowedKey = clientKey.map { NIOSSHPrivateKey(ed25519Key: $0).publicKey } ?? authorizedPublicKey
         let sftpRoot = NSTemporaryDirectory() + "bastion-sftp-test-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: sftpRoot, withIntermediateDirectories: true)
         let observedDirectTCPIPTargets = NIOLockedValueBox<[(host: String, port: Int)]>([])
@@ -640,7 +652,7 @@ struct LoopbackServer {
                     NIOSSHHandler(
                         role: .server(.init(
                             hostKeys: [hostKey],
-                            userAuthDelegate: ServerAuth(password: password),
+                            userAuthDelegate: ServerAuth(password: password, authorizedPublicKey: allowedKey),
                             globalRequestDelegate: ServerRemoteForwardingDelegate())),
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: { child, channelType in
@@ -664,7 +676,8 @@ struct LoopbackServer {
             }
         let channel = try bootstrap.bind(host: "127.0.0.1", port: 0).wait()
         return LoopbackServer(
-            group: group, channel: channel, sftpRoot: sftpRoot,
+            group: group, channel: channel, realExecAuth: clientKey.map { .ed25519Seed($0.rawRepresentation) },
+            sftpRoot: sftpRoot,
             observedDirectTCPIPTargets: observedDirectTCPIPTargets,
             observedWindowChanges: observedWindowChanges,
             silent: silent)

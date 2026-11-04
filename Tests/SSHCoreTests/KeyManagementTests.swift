@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import NIOSSH
 @testable import SSHCore
 
 final class KeyGeneratorTests: XCTestCase {
@@ -243,9 +244,9 @@ final class DeployPublicKeyCommandWindowsTests: XCTestCase {
 
 final class VerifyKeyAuthWorksTests: XCTestCase {
     func testSucceedsWithValidKeyAgainstRealServer() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
-        defer { server.shutdown() }
         let pair = KeyGenerator.generateEd25519()
+        let server = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))
+        defer { server.shutdown() }
         let ok = await SSHSession.verifyKeyAuthWorks(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
             seed: pair.seed, knownHosts: KnownHosts(path: nil))
@@ -267,10 +268,10 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
     func testSucceedsThroughJumpHost() async throws {
         let jumpServer = try LoopbackServer.start(password: "jump-pw", realDirectTCPIPForwarding: true)
         defer { jumpServer.shutdown() }
-        let targetServer = try LoopbackServer.start(password: "target-pw")
+        let pair = KeyGenerator.generateEd25519()
+        let targetServer = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))
         defer { targetServer.shutdown() }
 
-        let pair = KeyGenerator.generateEd25519()
         let ok = await SSHSession.verifyKeyAuthWorks(
             target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
             seed: pair.seed, knownHosts: KnownHosts(path: nil),
@@ -286,10 +287,10 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
     func testFailsWhenJumpAuthFails() async throws {
         let jumpServer = try LoopbackServer.start(password: "jump-pw", realDirectTCPIPForwarding: true)
         defer { jumpServer.shutdown() }
-        let targetServer = try LoopbackServer.start(password: "target-pw")
+        let pair = KeyGenerator.generateEd25519()
+        let targetServer = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))
         defer { targetServer.shutdown() }
 
-        let pair = KeyGenerator.generateEd25519()
         let ok = await SSHSession.verifyKeyAuthWorks(
             target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
             seed: pair.seed, knownHosts: KnownHosts(path: nil),
