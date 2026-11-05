@@ -24,6 +24,12 @@ Build and test the Swift package (works on Linux and macOS):
 swift build && swift test
 ```
 
+Test the tvOS OAuth token store outside Xcode (Linux only):
+
+```bash
+bash Tests/TVAppTests/run-token-store-tests.sh
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
