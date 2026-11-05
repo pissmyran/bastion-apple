@@ -34,7 +34,15 @@ Importing an SSH config adds only aliases that do not exist yet and never change
 
 Remote port forwarding reserves each remote port once per session, whatever the bind host. Port 0 (a server-assigned port) is allowed only while no other port is reserved. A listen request that gets no answer within 30 seconds fails and closes the session. `close()` stops routing, waits up to one second for the server to confirm the cancellation and releases the reservation only on that confirmation; a listen or cancel with an uncertain outcome keeps its reservation for the rest of the session.
 
+Local and SOCKS forwards share one shutdown gate (`ForwardConnections`). `close()` first stops admitting new connections and SSH channel opens, then closes the listener and every active connection, and waits for pending SSH channel opens to resolve. That wait is bounded to 15 seconds, the same bound as the session drain; opens that still have not resolved are abandoned so a stuck open cannot block session cleanup or keep the forward alive.
+
 `ExternalBinaryFetcher` caches a downloaded binary at `cacheDir/<checksum>/<binaryName>`. The SHA-256 is verified before the file is renamed into place, so a failed or mismatching download leaves an existing cache entry untouched.
+
+The cache validates its input: `binaryName` must be a single file name (no separators, `.`, `..` or NUL), the checksum must be 64 lowercase hex characters, and `cacheDir` must be trusted. A cache hit must be a regular file opened without following symbolic links, so a link is never accepted even when its target matches the checksum. A directory in place of the file is replaced only after a verified download.
+
+System metrics parsed from remote output (memory, disk, uptime) are range-checked. A value that is negative, larger than its total, not finite or whose kilobyte-to-byte conversion overflows is rejected: the memory probe returns no result and the disk probe skips that line.
+
+OAuth token refreshes are serialized per provider. Each logout or login bumps a generation counter for the provider. A refresh result that arrives after the account changed (the generation differs) is discarded and never overwrites a newer login. Only `invalid_grant` means the refresh token is permanently invalid; it deletes the stored token and requires a new sign-in, unless a newer login has replaced it in the meantime. An expired token without a refresh token is never returned as valid.
 
 The tvOS OAuth token store keeps tokens in the Keychain. It is compiled outside Xcode, with an in-memory Keychain, by `Tests/TVAppTests/run-token-store-tests.sh` (Linux only).
 

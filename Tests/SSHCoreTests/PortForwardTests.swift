@@ -49,6 +49,23 @@ final class PortForwardTests: XCTestCase {
         try await group.shutdownGracefully()
     }
 
+    func testAbandonedOpenDoesNotRetainConnections() async throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let server = try await ServerBootstrap(group: group)
+            .bind(host: "127.0.0.1", port: 0).get()
+        weak var weakConnections: ForwardConnections?
+        var pending: EventLoopPromise<Void>?
+        do {
+            let connections = ForwardConnections(drainTimeout: .milliseconds(100))
+            weakConnections = connections
+            pending = connections.beginOpen(on: server.eventLoop)
+            await connections.close(serverChannel: server)
+        }
+        XCTAssertNil(weakConnections, "an abandoned open must not keep the closed instance alive")
+        pending?.succeed(())
+        try await group.shutdownGracefully()
+    }
+
     func testCloseDrainsPendingLocalAndDynamicSSHOpens() async throws {
         for dynamic in [false, true] {
             let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)

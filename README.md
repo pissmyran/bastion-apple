@@ -48,6 +48,7 @@ cross-platform documentation and sync compatibility reviews. See
 
 ## More
 
+- [Behavior rules](docs/architecture.md): SSH config import, port forwarding, the external binary cache, system metrics and OAuth refresh
 - [The documentation](https://myrpisset.github.io/bastion-apple/): getting started, architecture, operations, sync format and releases
 - [SECURITY.md](SECURITY.md): report a vulnerability
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribute

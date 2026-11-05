@@ -73,6 +73,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
 - **Releases:** the pull request title decides the version; see `docs/release.md`.
+- **Behavior rules** for SSH config import, port forwarding (reservations, timeouts, teardown), the external binary cache, system metrics and OAuth refresh are in [docs/architecture.md](docs/architecture.md). Change the code and that page in the same pull request.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
 ## CodeRabbit configuration

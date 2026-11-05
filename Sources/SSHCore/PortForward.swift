@@ -69,8 +69,8 @@ final class ForwardConnections: @unchecked Sendable {
             return (id, promise)
         }
         guard let (id, promise) = entry else { return nil }
-        promise.futureResult.whenComplete { _ in
-            self.state.withLockedValue { _ = $0.opens.removeValue(forKey: id) }
+        promise.futureResult.whenComplete { [weak self] _ in
+            self?.state.withLockedValue { _ = $0.opens.removeValue(forKey: id) }
         }
         return promise
     }
@@ -92,6 +92,9 @@ final class ForwardConnections: @unchecked Sendable {
             let timer = loop.scheduleTask(in: drainTimeout) { drained.succeed(()) }
             _ = try? await drained.futureResult.get()
             timer.cancel()
+            // Abandon opens that are still unresolved so they cannot keep this
+            // instance alive through their completion callbacks.
+            state.withLockedValue { $0.opens.removeAll() }
         }
         _ = try? await serverChannel.closeFuture.get()
     }
