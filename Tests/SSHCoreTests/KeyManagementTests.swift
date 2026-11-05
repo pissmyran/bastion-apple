@@ -372,7 +372,7 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
             target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
             seed: pair.seed, knownHosts: KnownHosts(path: nil),
             jump: (target: SSHTarget(host: "127.0.0.1", port: jumpServer.port, username: "tester"),
-                   auth: .password("wrong-jump-pw")))
+                   auth: .password(TestCredentials.wrongPassword)))
         XCTAssertFalse(ok)
     }
 }

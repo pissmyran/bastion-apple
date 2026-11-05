@@ -30,7 +30,7 @@ final class AuthFailureTerminationTests: XCTestCase {
     private func makeSessionWithWrongPassword(port: Int) -> SSHSession {
         SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: port, username: "tester"),
-            auth: .password("fel lösenord"),
+            auth: .password(TestCredentials.wrongPassword),
             knownHosts: KnownHosts(path: nil))
     }
 

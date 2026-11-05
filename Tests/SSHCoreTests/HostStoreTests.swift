@@ -362,10 +362,10 @@ final class HostStoreTests: XCTestCase {
         XCTAssertEqual(target.jumpHostID, jump.id)
         XCTAssertEqual(store.get(target.id)?.jumpHostID, jump.id)
         XCTAssertEqual(store.get(jump.id), original)
-        let result = ConnectionPlanning.plan(targetAuth: .password("target"),
+        let result = ConnectionPlanning.plan(targetAuth: .password(TestCredentials.targetPassword),
                                              jumpHostID: target.jumpHostID,
                                              jumpHost: store.get(jump.id),
-                                             jumpAuth: .password("jump"))
+                                             jumpAuth: .password(TestCredentials.jumpPassword))
         XCTAssertEqual(try result.get().jump?.target.host, jump.hostName)
     }
 

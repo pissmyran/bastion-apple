@@ -62,7 +62,7 @@ final class SSHCoreTests: XCTestCase {
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("wrong"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.wrongPassword), knownHosts: KnownHosts(path: nil))
 
         do {
             try await session.connect()

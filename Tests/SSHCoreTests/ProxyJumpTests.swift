@@ -48,7 +48,7 @@ final class ProxyJumpTests: XCTestCase {
 
         let target = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
-            auth: .password("helt fel"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.wrongPassword), knownHosts: KnownHosts(path: nil))
         do {
             try await target.connect(via: jump)
             _ = try await target.run("whoami")
@@ -64,12 +64,12 @@ final class ProxyJumpTests: XCTestCase {
     func testConnectViaUnconnectedJumpThrows() async throws {
         let jump = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: 1, username: "tester"),
-            auth: .password("x"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.targetPassword), knownHosts: KnownHosts(path: nil))
         // jump.connect() anropas medvetet ALDRIG.
 
         let target = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: 2, username: "tester"),
-            auth: .password("y"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.jumpPassword), knownHosts: KnownHosts(path: nil))
         do {
             try await target.connect(via: jump)
             XCTFail("skulle ha kastat — jump är inte ansluten")
@@ -168,7 +168,7 @@ final class ProxyJumpTests: XCTestCase {
         do {
             _ = try await SSHConnectionChain.connect(
                 target: SSHTarget(host: "127.0.0.1", port: 1, username: "tester"),
-                targetAuth: .password("x"),
+                targetAuth: .password(TestCredentials.targetPassword),
                 jump: nil,
                 knownHosts: KnownHosts(path: nil))
             XCTFail("skulle ha misslyckats — ingenting lyssnar på port 1")
@@ -184,8 +184,8 @@ final class ProxyJumpTests: XCTestCase {
         do {
             _ = try await SSHConnectionChain.connect(
                 target: SSHTarget(host: "127.0.0.1", port: 2, username: "tester"),
-                targetAuth: .password("x"),
-                jump: (target: SSHTarget(host: "127.0.0.1", port: 1, username: "tester"), auth: .password("y")),
+                targetAuth: .password(TestCredentials.targetPassword),
+                jump: (target: SSHTarget(host: "127.0.0.1", port: 1, username: "tester"), auth: .password(TestCredentials.jumpPassword)),
                 knownHosts: KnownHosts(path: nil))
             XCTFail("skulle ha misslyckats — ingenting lyssnar på port 1")
         } catch {
@@ -210,7 +210,7 @@ final class ProxyJumpTests: XCTestCase {
         do {
             let chain = try await SSHConnectionChain.connect(
                 target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
-                targetAuth: .password("helt fel"),
+                targetAuth: .password(TestCredentials.wrongPassword),
                 jump: (target: SSHTarget(host: "127.0.0.1", port: jumpServer.port, username: "tester"),
                        auth: .password(TestCredentials.jumpPassword)),
                 knownHosts: KnownHosts(path: nil))

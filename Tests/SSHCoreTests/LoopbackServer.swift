@@ -11,12 +11,22 @@ import Glibc
 #endif
 @testable import SSHCore
 
-/// Passwords accepted by the loopback test server. They are generated for each
+/// Secrets used by the tests (passwords, passphrases, keys, tokens). They are generated for each
 /// test process, so no credential is committed to the repository.
 enum TestCredentials {
     static let password = "pw-" + UUID().uuidString
     static let jumpPassword = "pw-" + UUID().uuidString
     static let targetPassword = "pw-" + UUID().uuidString
+    /// A password no test server accepts.
+    static let wrongPassword = "pw-" + UUID().uuidString
+    static let passphrase = "pass-" + UUID().uuidString
+    static let wrongPassphrase = "pass-" + UUID().uuidString
+    static let secretAccessKey = "key-" + UUID().uuidString
+    static let accessToken = "access-" + UUID().uuidString
+    static let refreshToken = "refresh-" + UUID().uuidString
+    static let newAccessToken = "access-" + UUID().uuidString
+    static let oldRefreshToken = "refresh-" + UUID().uuidString
+    static let rotatedRefreshToken = "refresh-" + UUID().uuidString
 }
 
 // En minimal SSH-server i processen, enbart för test. Accepterar ett lösenord

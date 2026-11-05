@@ -54,7 +54,7 @@ final class S3ClientTests: XCTestCase {
     }
 
     func testSigV4DiffersWithDifferentPayload() {
-        let credentials = S3Credentials(accessKeyID: "AKID", secretAccessKey: "secret")
+        let credentials = S3Credentials(accessKeyID: "AKID", secretAccessKey: TestCredentials.secretAccessKey)
         let empty = AWSSigV4.sign(
             method: "PUT", host: "h", path: "/x", queryString: "", payload: Data(),
             region: "us-east-1", credentials: credentials, amzDate: "20260101T000000Z")
@@ -147,7 +147,7 @@ final class S3ClientTests: XCTestCase {
         config.protocolClasses = [RecordingURLProtocol.self]
         return S3Client(
             endpoint: endpoint, region: "us-east-1",
-            credentials: S3Credentials(accessKeyID: "AKID", secretAccessKey: "secret"),
+            credentials: S3Credentials(accessKeyID: "AKID", secretAccessKey: TestCredentials.secretAccessKey),
             session: URLSession(configuration: config))
     }
 
