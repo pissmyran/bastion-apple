@@ -89,12 +89,12 @@ func withTimeout<T: Sendable>(
 
 final class TerminalTeardownRaceTests: XCTestCase {
     func testCloseDuringActiveShellTerminatesOutputStreamPromptly() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 
@@ -130,12 +130,12 @@ final class TerminalTeardownRaceTests: XCTestCase {
     func testCloseImmediatelyAfterConnectLeavesNoOrphanedSession() async throws {
         // Motsvarar det ursprungliga CodeRabbit-fyndet på #155: dismiss
         // som landar precis EFTER connect() men FÖRE/UNDER openShell().
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         await session.close()
 
@@ -196,12 +196,12 @@ final class TerminalTeardownRaceTests: XCTestCase {
 
     private static func runConcurrentOpenShellAndCloseIterations() async throws {
         for _ in 0..<200 {
-            let server = try LoopbackServer.start(password: "hunter2")
+            let server = try LoopbackServer.start(password: TestCredentials.password)
             defer { server.shutdown() }
 
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
             try await session.connect()
 
             await withTaskGroup(of: Void.self) { group in
@@ -240,12 +240,12 @@ final class TerminalTeardownRaceTests: XCTestCase {
 
     private static func runConcurrentExecuteAndCloseIterations() async throws {
         for _ in 0..<200 {
-            let server = try LoopbackServer.start(password: "hunter2")
+            let server = try LoopbackServer.start(password: TestCredentials.password)
             defer { server.shutdown() }
 
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
             try await session.connect()
 
             await withTaskGroup(of: Void.self) { group in
@@ -285,12 +285,12 @@ final class TerminalTeardownRaceTests: XCTestCase {
 
     private static func runConcurrentSFTPOpenAndCloseIterations() async throws {
         for _ in 0..<200 {
-            let server = try LoopbackServer.start(password: "hunter2")
+            let server = try LoopbackServer.start(password: TestCredentials.password)
             defer { server.shutdown() }
 
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
             try await session.connect()
 
             await withTaskGroup(of: Void.self) { group in

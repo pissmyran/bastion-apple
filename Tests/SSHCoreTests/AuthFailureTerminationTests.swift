@@ -36,7 +36,7 @@ final class AuthFailureTerminationTests: XCTestCase {
 
     /// `execute()` — strömmen ska avslutas med `.authenticationFailed`.
     func testExecuteFailsWithTypedAuthenticationErrorNotServerEOF() async throws {
-        let server = try LoopbackServer.start(password: "rätt lösenord")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = makeSessionWithWrongPassword(port: server.port)
@@ -71,7 +71,7 @@ final class AuthFailureTerminationTests: XCTestCase {
     /// `openShell()` — samma invariant, men vägen dit går via ett
     /// `EventLoopPromise` i stället för en ström.
     func testOpenShellFailsWithTypedAuthenticationErrorNotServerEOF() async throws {
-        let server = try LoopbackServer.start(password: "rätt lösenord")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = makeSessionWithWrongPassword(port: server.port)
@@ -102,7 +102,7 @@ final class AuthFailureTerminationTests: XCTestCase {
     /// vidare (den befintliga `catch let error as SSHError`-grenen i
     /// `openChildChannel`), inte inpackat i ett nytt `.channelFailed(...)`.
     func testSFTPOpenFailsWithTypedAuthenticationErrorNotServerEOF() async throws {
-        let server = try LoopbackServer.start(password: "rätt lösenord")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = makeSessionWithWrongPassword(port: server.port)

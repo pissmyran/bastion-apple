@@ -214,11 +214,11 @@ final class DeployPublicKeyCommandTests: XCTestCase {
     }
 
     func testDeploymentRejectsRecordSeparatorsOnAllPlatforms() async throws {
-        let server = try LoopbackServer.start(password: "test")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("test"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         for platform in RemotePlatform.allCases {
             for line in ["", "   ", "ssh-ed25519 key\nssh-ed25519 attacker",
@@ -238,11 +238,11 @@ final class DeployPublicKeyCommandTests: XCTestCase {
     }
 
     func testDeploymentAcceptsSingleLineOnAllPlatforms() async throws {
-        let server = try LoopbackServer.start(password: "test")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("test"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         do {
             let line = KeyGenerator.generateEd25519(comment: #"test\n o'brien"#).publicKeyLine
@@ -343,7 +343,7 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
     /// jump+target-serveruppsättning som `ProxyJumpTests` för att bevisa att
     /// nyckelverifieringen faktiskt går GENOM tunneln, inte direkt.
     func testSucceedsThroughJumpHost() async throws {
-        let jumpServer = try LoopbackServer.start(password: "jump-pw", realDirectTCPIPForwarding: true)
+        let jumpServer = try LoopbackServer.start(password: TestCredentials.jumpPassword, realDirectTCPIPForwarding: true)
         defer { jumpServer.shutdown() }
         let pair = KeyGenerator.generateEd25519()
         let targetServer = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))
@@ -353,7 +353,7 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
             target: SSHTarget(host: "127.0.0.1", port: targetServer.port, username: "tester"),
             seed: pair.seed, knownHosts: KnownHosts(path: nil),
             jump: (target: SSHTarget(host: "127.0.0.1", port: jumpServer.port, username: "tester"),
-                   auth: .password("jump-pw")))
+                   auth: .password(TestCredentials.jumpPassword)))
         XCTAssertTrue(ok)
     }
 
@@ -362,7 +362,7 @@ final class VerifyKeyAuthWorksTests: XCTestCase {
     /// faktiskt kontrolleras, inte bara att SSHConnectionChain råkar lyckas
     /// via någon annan väg.
     func testFailsWhenJumpAuthFails() async throws {
-        let jumpServer = try LoopbackServer.start(password: "jump-pw", realDirectTCPIPForwarding: true)
+        let jumpServer = try LoopbackServer.start(password: TestCredentials.jumpPassword, realDirectTCPIPForwarding: true)
         defer { jumpServer.shutdown() }
         let pair = KeyGenerator.generateEd25519()
         let targetServer = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))

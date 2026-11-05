@@ -186,11 +186,11 @@ private final class ByteCollectorHandler2: ChannelInboundHandler, @unchecked Sen
 
 final class DynamicPortForwardTests: XCTestCase {
     func testCloseTerminatesActiveDynamicTunnel() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let forward = try await session.openDynamicPortForward(bindPort: 0)
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -222,12 +222,12 @@ final class DynamicPortForwardTests: XCTestCase {
     /// klienten faktiskt kallade `write()` med) — utan `leftover`-vidare-
     /// befordran i `SOCKSHandshakeHandler` hade de extra bytesen tystats.
     func testPipelinedPayloadInSameWriteAsRequestIsNotDropped() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openDynamicPortForward(bindPort: 0)
@@ -274,12 +274,12 @@ final class DynamicPortForwardTests: XCTestCase {
     /// ekar, vilket `ServerDirectTCPIPEchoHandler` skulle göra oavsett mål),
     /// dels att data flödar rätt efter handskakningen.
     func testDynamicForwardRoutesDistinctTargetsAndEchoes() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openDynamicPortForward(bindPort: 0)

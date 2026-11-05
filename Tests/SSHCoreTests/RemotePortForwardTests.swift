@@ -58,11 +58,11 @@ private final class ControlledForwardDelegate: GlobalRequestDelegate {
 
 final class RemotePortForwardTests: XCTestCase {
     func testDisconnectDoesNotWaitForCancelReply() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", withholdCancelReply: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, withholdCancelReply: true)
         defer { server.shutdown() }
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -129,12 +129,12 @@ final class RemotePortForwardTests: XCTestCase {
     /// genom en `forwarded-tcpip`-SSH-kanal tillbaka till klienten, till en
     /// riktig lokal TCP-ekoserver, och samma väg tillbaka.
     func testRemotePortForwardEchoesThroughSSHChannel() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         // Riktigt lokalt mål (motsvarande "internal-target" i localforward-
@@ -193,10 +193,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testPendingRequestsAndRefusalRelease() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let first = Task { try await session.openRemotePortForward(bindHost: "127.0.0.1", bindPort: 45678, targetHost: "first", targetPort: 1) }
         let pending = try await delegate.waitForRequest(0)
@@ -225,10 +225,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testAllocationAndCancellationReservations() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let opening = Task { try await session.openRemotePortForward(bindPort: 0, targetHost: "first", targetPort: 1) }
         let request = try await delegate.waitForRequest(0)
@@ -257,10 +257,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testDistinctPortsCanBeReservedConcurrently() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let firstOpening = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "first", targetPort: 1) }
         let firstRequest = try await delegate.waitForRequest(0)
@@ -283,10 +283,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testUnansweredListenRequestTimesOutAndClosesSession() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         session.remoteForwardListenTimeout = .milliseconds(200)
 
@@ -312,10 +312,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testInvalidAllocatedPortKeepsReservation() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let opening = Task { try await session.openRemotePortForward(bindPort: 0, targetHost: "first", targetPort: 1) }
         try await delegate.waitForRequest(0).succeed(.init(boundPort: nil))
@@ -330,10 +330,10 @@ final class RemotePortForwardTests: XCTestCase {
 
     func testStaleCloseCannotCancelReplacement() async throws {
         let delegate = ControlledForwardDelegate()
-        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        let server = try LoopbackServer.start(password: TestCredentials.password, globalRequestDelegate: delegate)
         defer { server.shutdown() }
         let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                                 auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let opening = Task { try await session.openRemotePortForward(bindPort: 45678, targetHost: "first", targetPort: 1) }
         try await delegate.waitForRequest(0).succeed(.init(boundPort: nil))
@@ -361,12 +361,12 @@ final class RemotePortForwardTests: XCTestCase {
     /// deterministiskt trigga just det här racet end-to-end över ett riktigt
     /// nätverk.
     func testUnregisteredPortIsRejectedNotCrashed() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         // En riktig, godtycklig Channel räcker — guarden avvisar innan den

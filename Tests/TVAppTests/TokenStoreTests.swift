@@ -39,7 +39,16 @@ final class TokenProtocol: URLProtocol {
 final class TokenStoreTests: XCTestCase {
     private let provider = "test-provider"
     private let endpoint = URL(string: "https://test.invalid/token")!
-    private let success = (200, "{\"access_token\":\"refreshed\",\"refresh_token\":\"rotated\",\"expires_in\":3600}")
+    // Token values are generated for each run, so no credential is committed.
+    private static let oldToken = "old-" + UUID().uuidString
+    private static let newLoginToken = "login-" + UUID().uuidString
+    private static let otherToken = "other-" + UUID().uuidString
+    private static let refreshedToken = "refreshed-" + UUID().uuidString
+    private static let rotatedToken = "rotated-" + UUID().uuidString
+    private static let refreshSecret = "refresh-" + UUID().uuidString
+    private var success: (Int, String) {
+        (200, "{\"access_token\":\"\(Self.refreshedToken)\",\"refresh_token\":\"\(Self.rotatedToken)\",\"expires_in\":3600}")
+    }
 
     override func setUp() {
         super.setUp()
@@ -53,11 +62,11 @@ final class TokenStoreTests: XCTestCase {
         URLProtocol.unregisterClass(TokenProtocol.self)
         super.tearDown()
     }
-    private func token(_ access: String, expired: Bool = false, refresh: String? = "refresh") -> StoredOAuthToken {
+    private func token(_ access: String, expired: Bool = false, refresh: String? = TokenStoreTests.refreshSecret) -> StoredOAuthToken {
         StoredOAuthToken(response: OAuthTokenResponse(accessToken: access, refreshToken: refresh, expiresIn: expired ? 0 : 3600))
     }
     private func beginRefresh(response: (Int, String)) throws -> (DispatchSemaphore, DispatchSemaphore, XCTestExpectation) {
-        try TVOAuthTokenStore.save(token("old", expired: true), for: provider)
+        try TVOAuthTokenStore.save(token(Self.oldToken, expired: true), for: provider)
         let started = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
         TokenProtocol.handler = {
@@ -87,21 +96,21 @@ final class TokenStoreTests: XCTestCase {
     func testNewLoginSurvivesPendingRefreshAndInvalidGrant() throws {
         for response in [success, (400, "{\"error\":\"invalid_grant\"}")] {
             let (_, release, done) = try beginRefresh(response: response)
-            try TVOAuthTokenStore.save(token("new-login"), for: provider)
+            try TVOAuthTokenStore.save(token(Self.newLoginToken), for: provider)
             release.signal()
             wait(for: [done], timeout: 5)
-            XCTAssertEqual(TVOAuthTokenStore.load(for: provider)?.accessToken, "new-login")
+            XCTAssertEqual(TVOAuthTokenStore.load(for: provider)?.accessToken, Self.newLoginToken)
         }
     }
     func testCurrentInvalidGrantDeletesCredential() throws {
-        try TVOAuthTokenStore.save(token("old", expired: true), for: provider)
+        try TVOAuthTokenStore.save(token(Self.oldToken, expired: true), for: provider)
         TokenProtocol.handler = { (400, "{\"error\":\"invalid_grant\"}") }
         XCTAssertThrowsError(try TVOAuthTokenStore.validAccessToken(for: provider, tokenEndpoint: endpoint, clientID: "client"))
         XCTAssertNil(TVOAuthTokenStore.load(for: provider))
     }
     func testRefreshesAreSerializedPerProvider() throws {
-        try TVOAuthTokenStore.save(token("old", expired: true), for: provider)
-        try TVOAuthTokenStore.save(token("other"), for: "other-provider")
+        try TVOAuthTokenStore.save(token(Self.oldToken, expired: true), for: provider)
+        try TVOAuthTokenStore.save(token(Self.otherToken), for: "other-provider")
         let started = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
         let countLock = NSLock()
@@ -116,12 +125,12 @@ final class TokenStoreTests: XCTestCase {
         let second = expectation(description: "second refresh")
         for done in [first, second] {
             DispatchQueue.global().async {
-                XCTAssertEqual(try? TVOAuthTokenStore.validAccessToken(for: self.provider, tokenEndpoint: self.endpoint, clientID: "client"), "refreshed")
+                XCTAssertEqual(try? TVOAuthTokenStore.validAccessToken(for: self.provider, tokenEndpoint: self.endpoint, clientID: "client"), Self.refreshedToken)
                 done.fulfill()
             }
         }
         XCTAssertEqual(started.wait(timeout: .now() + 5), .success)
-        XCTAssertEqual(try TVOAuthTokenStore.validAccessToken(for: "other-provider", tokenEndpoint: endpoint, clientID: "client"), "other")
+        XCTAssertEqual(try TVOAuthTokenStore.validAccessToken(for: "other-provider", tokenEndpoint: endpoint, clientID: "client"), Self.otherToken)
         release.signal()
         wait(for: [first, second], timeout: 5)
         countLock.lock(); let requestCount = requests; countLock.unlock()
@@ -129,7 +138,7 @@ final class TokenStoreTests: XCTestCase {
         _ = TVOAuthTokenStore.logout("other-provider")
     }
     func testRefreshThenLogoutWaitsForCredentialWrite() throws {
-        try TVOAuthTokenStore.save(token("old", expired: true), for: provider)
+        try TVOAuthTokenStore.save(token(Self.oldToken, expired: true), for: provider)
         TokenProtocol.handler = { self.success }
         let writing = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
@@ -137,7 +146,7 @@ final class TokenStoreTests: XCTestCase {
         let refreshed = expectation(description: "refresh completed")
         DispatchQueue.global().async {
             defer { refreshed.fulfill() }
-            XCTAssertEqual(try? TVOAuthTokenStore.validAccessToken(for: self.provider, tokenEndpoint: self.endpoint, clientID: "client"), "refreshed")
+            XCTAssertEqual(try? TVOAuthTokenStore.validAccessToken(for: self.provider, tokenEndpoint: self.endpoint, clientID: "client"), Self.refreshedToken)
         }
         XCTAssertEqual(writing.wait(timeout: .now() + 5), .success)
         let logoutStarted = DispatchSemaphore(value: 0)

@@ -41,13 +41,13 @@ final class PortForwardTests: XCTestCase {
             let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
             let requested = group.next().makePromise(of: Void.self)
             let release = group.next().makePromise(of: Void.self)
-            let server = try LoopbackServer.start(password: "hunter2", directTCPIPGate: { channel in
+            let server = try LoopbackServer.start(password: TestCredentials.password, directTCPIPGate: { channel in
                 requested.succeed(())
                 return release.futureResult.hop(to: channel.eventLoop)
             })
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-                auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+                auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
             try await session.connect()
             let port: Int
             let stop: () async -> Void
@@ -89,12 +89,12 @@ final class PortForwardTests: XCTestCase {
     /// mot den lyssnare `openLocalPortForward` startar, genom en direct-tcpip
     /// SSH-kanal, till serverns eko-handler (se `LoopbackServer`), och tillbaka.
     func testLocalPortForwardEchoesThroughSSHChannel() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openLocalPortForward(
@@ -136,12 +136,12 @@ final class PortForwardTests: XCTestCase {
     /// en aktiv anslutning skulle fortsätta köra tills fjärrsidan/sessionen
     /// stängdes, trots att doc-kommentaren påstod att close() stängde allt.
     func testCloseTerminatesActiveTunnelConnection() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openLocalPortForward(

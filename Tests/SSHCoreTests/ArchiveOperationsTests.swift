@@ -80,7 +80,7 @@ final class ArchiveOperationsTests: XCTestCase {
         let unrelatedKey = KeyGenerator.generateEd25519()
         let marker = server.sftpRoot + "/unauthorized"
 
-        for auth in [otherServerAuth, .ed25519Seed(unrelatedKey.seed), .password("hunter2")] {
+        for auth in [otherServerAuth, .ed25519Seed(unrelatedKey.seed), .password(TestCredentials.password)] {
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
                 auth: auth, knownHosts: KnownHosts(path: nil))
