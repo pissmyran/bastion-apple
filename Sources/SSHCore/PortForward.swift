@@ -36,6 +36,13 @@ final class ForwardConnections: @unchecked Sendable {
         var opens: [Int: EventLoopFuture<Void>] = [:]
     }
     private let state = NIOLockedValueBox(State())
+    /// Upper bound for waiting on SSH opens that never resolve during `close`,
+    /// matching the 15 s bound of `SSHSession.waitForChildOpsToDrain()`.
+    let drainTimeout: TimeAmount
+
+    init(drainTimeout: TimeAmount = .seconds(15)) {
+        self.drainTimeout = drainTimeout
+    }
 
     func register(_ channel: Channel) -> Bool {
         let id = ObjectIdentifier(channel)
@@ -76,7 +83,16 @@ final class ForwardConnections: @unchecked Sendable {
         serverChannel.close(promise: nil)
         for channel in snapshot.0 { channel.close(promise: nil) }
         for channel in snapshot.0 { _ = try? await channel.closeFuture.get() }
-        for open in snapshot.1 { _ = try? await open.get() }
+        if !snapshot.1.isEmpty {
+            // Wait for the opens to resolve, but never longer than the bound:
+            // an open that never completes must not block session cleanup.
+            let loop = serverChannel.eventLoop
+            let drained = loop.makePromise(of: Void.self)
+            EventLoopFuture.andAllComplete(snapshot.1, on: loop).cascade(to: drained)
+            let timer = loop.scheduleTask(in: drainTimeout) { drained.succeed(()) }
+            _ = try? await drained.futureResult.get()
+            timer.cancel()
+        }
         _ = try? await serverChannel.closeFuture.get()
     }
 }

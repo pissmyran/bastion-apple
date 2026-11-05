@@ -36,6 +36,19 @@ final class PortForwardTests: XCTestCase {
         try await group.shutdownGracefully()
     }
 
+    func testShutdownGivesUpOnPendingOpenThatNeverResolves() async throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let server = try await ServerBootstrap(group: group)
+            .bind(host: "127.0.0.1", port: 0).get()
+        let connections = ForwardConnections(drainTimeout: .milliseconds(200))
+        let pending = try XCTUnwrap(connections.beginOpen(on: server.eventLoop))
+        try await withTimeout(seconds: 5) {
+            await connections.close(serverChannel: server)
+        }
+        pending.succeed(())
+        try await group.shutdownGracefully()
+    }
+
     func testCloseDrainsPendingLocalAndDynamicSSHOpens() async throws {
         for dynamic in [false, true] {
             let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
