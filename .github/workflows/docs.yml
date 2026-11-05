@@ -123,6 +123,6 @@ jobs:
       id-token: write
     uses: ./.github/workflows/reusable-zensical-docs.yml
     with:
-      ref: refs/tags/${{ needs.resolve-release.outputs.tag }}
+      ref: ${{ needs.resolve-release.outputs.tag }}
       config_file: zensical.toml
       site_dir: site
