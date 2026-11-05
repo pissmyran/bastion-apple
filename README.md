@@ -1,6 +1,6 @@
 # Bastion for Apple
 
-**Documentation:** [pissmyran.github.io/bastion-apple](https://pissmyran.github.io/bastion-apple/)
+**Documentation:** [docs.denied.se/bastion-apple](https://docs.denied.se/bastion-apple/)
 
 Bastion is an SSH client. This repo holds the version for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/Pissmyran/bastion-linux), [Bastion for Windows](https://github.com/Pissmyran/bastion-windows), [Bastion for Android](https://github.com/Pissmyran/bastion-android). The [Bastion hub](https://github.com/Pissmyran/bastion) ties them together.
 
@@ -42,6 +42,6 @@ cross-platform documentation and sync compatibility reviews. See
 
 ## More
 
-- [The documentation](https://pissmyran.github.io/bastion-apple/): getting started, architecture, operations, sync format and releases
+- [The documentation](https://docs.denied.se/bastion-apple/): getting started, architecture, operations, sync format and releases
 - [SECURITY.md](SECURITY.md): report a vulnerability
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribute
