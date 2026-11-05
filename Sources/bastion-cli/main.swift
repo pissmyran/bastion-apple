@@ -1,5 +1,10 @@
 import Foundation
 import SSHCore
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 
 // bastion-cli — bevisar SSH-kärnan mot en riktig server.
 //
@@ -28,6 +33,69 @@ nonisolated(unsafe) var interrupted: sig_atomic_t = 0
 func fail(_ msg: String) -> Never {
     FileHandle.standardError.write(Data((msg + "\n").utf8))
     exit(2)
+}
+
+// Terminal state shared with the signal handlers below. The handlers are C
+// function pointers, so they can only reach globals, and they only make
+// async-signal-safe calls (tcsetattr, signal, sigprocmask, raise, write).
+nonisolated(unsafe) var promptVisible = termios()
+nonisolated(unsafe) var promptHidden = termios()
+nonisolated(unsafe) var promptText: UnsafeMutablePointer<CChar>?
+
+/// Signals that end the process: show the terminal again, then let the signal
+/// take its default action once the handler returns.
+let promptTerminatingSignals: [Int32] = [SIGINT, SIGQUIT, SIGHUP, SIGTERM, SIGPIPE]
+/// Job-control stops: show the terminal while stopped, hide it again on resume.
+let promptStopSignals: [Int32] = [SIGTSTP, SIGTTIN, SIGTTOU]
+
+func promptRestoreAndTerminate(_ sig: Int32) {
+    _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &promptVisible)
+    _ = signal(sig, SIG_DFL)
+    _ = raise(sig)  // Blocked inside the handler; delivered when it returns.
+}
+
+func promptRestoreAndStop(_ sig: Int32) {
+    _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &promptVisible)
+    _ = signal(sig, SIG_DFL)
+    var unblock = sigset_t()
+    sigemptyset(&unblock)
+    sigaddset(&unblock, sig)
+    _ = sigprocmask(SIG_UNBLOCK, &unblock, nil)
+    _ = raise(sig)  // The process stops here and continues after SIGCONT.
+    _ = signal(sig, promptRestoreAndStop)
+    _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &promptHidden)
+    if let promptText {
+        _ = write(STDERR_FILENO, "\n", 1)
+        _ = write(STDERR_FILENO, promptText, strlen(promptText))
+    }
+}
+
+/// Reads a password without echo when stdin is a terminal. The terminal is
+/// restored on every exit path, including interrupts; a stop (Ctrl-Z) shows the
+/// terminal while stopped and resumes the hidden prompt afterwards. Piped input
+/// is read as one line, as before.
+func readPassword(prompt: String) -> String? {
+    guard isatty(STDIN_FILENO) == 1, tcgetattr(STDIN_FILENO, &promptVisible) == 0 else {
+        FileHandle.standardError.write(Data(prompt.utf8))
+        return readLine(strippingNewline: true)
+    }
+    promptHidden = promptVisible
+    promptHidden.c_lflag &= ~tcflag_t(ECHO | ECHONL)
+    promptText = strdup(prompt)
+    defer { free(promptText); promptText = nil }
+
+    // Install the handlers before hiding input so no signal can leave it hidden.
+    let previous = promptTerminatingSignals.map { ($0, signal($0, promptRestoreAndTerminate)) }
+        + promptStopSignals.map { ($0, signal($0, promptRestoreAndStop)) }
+    defer {
+        _ = tcsetattr(STDIN_FILENO, TCSANOW, &promptVisible)
+        for (sig, handler) in previous.reversed() { _ = signal(sig, handler) }
+        FileHandle.standardError.write(Data("\n".utf8))
+    }
+    guard tcsetattr(STDIN_FILENO, TCSANOW, &promptHidden) == 0 else { return nil }
+    // Prompt only once input is hidden, so nothing typed after it can echo.
+    FileHandle.standardError.write(Data(prompt.utf8))
+    return readLine(strippingNewline: true)
 }
 
 /// `ssh -L`/`-R`-syntax (samma strängformat för båda): `[bindHost:]bindPort:targetHost:targetPort`.
@@ -180,8 +248,7 @@ if let keyFile = env["BASTION_KEY_FILE"] {
     FileHandle.standardError.write(Data("Använder \(defaultKey)\n".utf8))
     auth = loadKey(defaultKey)
 } else {
-    FileHandle.standardError.write(Data("Lösenord för \(username)@\(hostPart): ".utf8))
-    guard let line = readLine(strippingNewline: true) else { fail("Inget lösenord.") }
+    guard let line = readPassword(prompt: "Lösenord för \(username)@\(hostPart): ") else { fail("Kunde inte läsa lösenordet säkert.") }
     auth = .password(line)
 }
 

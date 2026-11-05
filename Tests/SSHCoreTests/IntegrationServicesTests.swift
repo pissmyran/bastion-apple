@@ -19,6 +19,15 @@ final class KubernetesServiceTests: XCTestCase {
         XCTAssertThrowsError(try KubernetesService.validate(String(repeating: "a", count: 64)))
     }
 
+    func testValidationRejectsTrailingLineSeparators() {
+        for separator in ["\n", "\r", "\r\n", "\u{0085}", "\u{2028}", "\u{2029}"] {
+            let name = "nginx" + separator
+            XCTAssertThrowsError(try KubernetesService.validate(name), name.debugDescription)
+            XCTAssertThrowsError(try KubernetesService.podLogsCommand(namespace: "default", pod: name, tail: 1))
+            XCTAssertThrowsError(try KubernetesService.podsCommand(.named(name)))
+        }
+    }
+
     func testInjectionCannotReachCommandBuilders() {
         for bad in ["pod; rm -rf /", "pod && curl evil", "pod$(id)", "pod|tee x", "'pod'", "a b"] {
             XCTAssertThrowsError(try KubernetesService.podLogsCommand(namespace: "default", pod: bad, tail: 100))
@@ -388,6 +397,26 @@ final class CloudflareServiceTests: XCTestCase {
         let tunnels = CloudflareService.parseTunnels(Self.tunnels)
         XCTAssertEqual(tunnels[0].colos, ["ARN", "HEL"])
         XCTAssertTrue(tunnels[1].colos.isEmpty)
+    }
+
+    func testColosPreserveFirstOccurrenceAndSkipEmptyNames() throws {
+        let json = """
+        [{"name": "t", "connections": [
+            {"colo_name": "HEL", "is_pending_reconnect": true},
+            {}, {"colo_name": ""}, {"colo_name": "ARN"},
+            {"colo_name": "HEL"}, {"colo_name": "hel"}]}]
+        """
+        let tunnel = try XCTUnwrap(CloudflareService.parseTunnels(json).first)
+        XCTAssertEqual(tunnel.colos, ["HEL", "ARN", "hel"])
+    }
+
+    func testColosWithManyDistinctConnections() {
+        let names = (0..<10_000).map { "colo-\($0)" }
+        let connections = (names + names.reversed()).map {
+            CloudflareConnection(colo: $0, pendingReconnect: false)
+        }
+        let tunnel = CloudflareTunnel(id: "t", name: "t", connections: connections)
+        XCTAssertEqual(tunnel.colos, names)
     }
 
     /// Äldre utdata saknar `connections`. Posten ska bli en tunnel som är NERE,

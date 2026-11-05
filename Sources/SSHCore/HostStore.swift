@@ -6,7 +6,8 @@ import Foundation
 /// Persisterar ett `SyncState` (värdar + gravstenar) så databasen kan slås ihop
 /// mellan enheter via `SyncEngine`. JSON medvetet (inte SQLite): diff-bart,
 /// synkbart, inga systemberoenden — funkar identiskt på iOS/macOS/Linux/Windows.
-public final class HostStore {
+// All mutable state and persistence are protected by `lock`.
+public final class HostStore: @unchecked Sendable {
     private let path: String?
     private let lock = NSLock()
     private var byID: [UUID: Host]
@@ -114,41 +115,40 @@ public final class HostStore {
     @discardableResult
     public func importSSHConfig(_ text: String) -> [Host] {
         let config = SSHConfig(text: text)
-        let existing = Set(all().map { $0.alias.lowercased() })
-        let fresh = Host.imported(from: config)
-            .filter { !existing.contains($0.alias.lowercased()) }
-        for host in fresh { upsert(host) }
-
-        // Andra pass: koppla ihop ProxyJump. Måste ske EFTER att alla värdar
-        // sparats — jump-hosten kan stå efter den som pekar på den i configen,
-        // och en koppling kräver mottagarens id.
-        //
-        // Bara nyimporterade värdar får sin jump satt. Att röra en värd som
-        // redan fanns vore att tyst skriva om något användaren kan ha ställt
-        // in själv, och hela importen bygger på att befintliga alias lämnas
-        // ifred.
-        //
-        // ProxyJump är den av de importerade inställningarna som märks mest
-        // när den tappas: målet är ofta bara nåbart genom hoppet, så utan
-        // kopplingen fungerar anslutningen inte alls.
-        var byAlias: [String: UUID] = [:]
-        for host in all() { byAlias[host.alias.lowercased()] = host.id }
-        var linked: [Host] = []
-        for host in fresh {
-            guard let raw = config.resolve(host.alias).proxyJump,
-                  let jumpAlias = SSHConfig.proxyJumpAlias(raw),
-                  let jumpID = byAlias[jumpAlias.lowercased()],
-                  jumpID != host.id  // en värd som pekar på sig själv är bara ett fel
-            else {
-                linked.append(host)
-                continue
-            }
-            var updated = host
-            updated.jumpHostID = jumpID
-            upsert(updated)
-            linked.append(updated)
+        let candidates = Host.imported(from: config).map { host in
+            (host, config.resolve(host.alias).proxyJump.flatMap(SSHConfig.proxyJumpAlias))
         }
-        return linked
+
+        return lock.withLock {
+            let existing = Set(byID.values.map { $0.alias.lowercased() })
+            let fresh = candidates.filter { !existing.contains($0.0.alias.lowercased()) }
+            guard !fresh.isEmpty else { return [] }
+
+            // Link ProxyJump after every new host has an ID: the jump host may
+            // come after the host that uses it. Only newly imported hosts get a
+            // link; existing hosts are never rewritten, since the user may have
+            // set them up. ProxyJump is the setting most missed when dropped:
+            // the target is often reachable only through the jump.
+            var byAlias: [String: UUID] = [:]
+            let hosts = Array(byID.values) + fresh.map { $0.0 }
+            for host in hosts.sorted(by: { $0.alias.lowercased() < $1.alias.lowercased() }) {
+                byAlias[host.alias.lowercased()] = host.id
+            }
+            var linked: [Host] = []
+            for (host, jumpAlias) in fresh {
+                var updated = host
+                if let jumpAlias, let jumpID = byAlias[jumpAlias.lowercased()], jumpID != host.id {
+                    updated.jumpHostID = jumpID
+                }
+                linked.append(updated)
+                var stored = updated
+                stored.modifiedAt = Date()
+                byID[stored.id] = stored
+                tombstones[stored.id] = nil
+            }
+            persist()
+            return linked
+        }
     }
 
     /// Full synkrunda mot en transport: hämta fjärrtillstånd, slå ihop lokalt,

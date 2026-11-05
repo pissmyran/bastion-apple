@@ -75,7 +75,8 @@ public final class WireGuardProfileStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(Array(byID.values).sorted { $0.name < $1.name }) {
-            try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            // Holds private keys: never readable by others, not even briefly.
+            try? PrivateFile.write(data, to: path)
         }
     }
 }

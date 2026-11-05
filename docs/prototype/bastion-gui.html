@@ -881,9 +881,9 @@ function runCommand(raw){
     case "uptime":
       out.push(` 09:41:12 up ${h.uptime.replace("d","days,").replace("h","hours")},  ${h.users.length} users,  load average: ${h.load.map(l => l.toFixed(2)).join(", ")}`);
       break;
-    case "whoami": out.push(h.user); break;
-    case "pwd": out.push(state.path); break;
-    case "hostname": out.push(h.id); break;
+    case "whoami": out.push(esc(h.user)); break;
+    case "pwd": out.push(esc(state.path)); break;
+    case "hostname": out.push(esc(h.id)); break;
     case "ls": {
       const entries = FS[state.path] || [];
       out.push(entries.length
@@ -927,11 +927,11 @@ function runCommand(raw){
       if (sub === "ps"){
         out.push("NAMES                IMAGE                           STATUS          PORTS");
         h.containers.filter(c => c.state === "running" || args.includes("-a")).forEach(c =>
-          out.push(`${c.name.padEnd(20)} ${c.image.padEnd(31)} ${(c.state === "running" ? "Up " + c.up : "Exited").padEnd(15)} ${c.ports}`));
+          out.push(`${esc(c.name.padEnd(20))} ${esc(c.image.padEnd(31))} ${esc((c.state === "running" ? "Up " + c.up : "Exited").padEnd(15))} ${esc(c.ports)}`));
       } else if (sub === "logs"){
         dockerLogs(h, args[1] || (h.containers[0] && h.containers[0].name)).forEach(l => out.push(l));
       } else if (sub === "restart"){
-        out.push(args[1] || "", `<span class="d">container restarted in 1.8 s</span>`);
+        out.push(esc(args[1] || ""), `<span class="d">container restarted in 1.8 s</span>`);
       } else if (sub === "compose"){
         out.push(`<span class="d">[+] Running ${h.containers.length}/${h.containers.length}</span>`,
           ...h.containers.map(c => ` &#10003; Container ${c.name}  Started`));
@@ -1057,8 +1057,8 @@ document.addEventListener("click", e => {
       break;
     }
     case "cd": state.path = id; render(); break;
-    case "logs": termInit(h); push(h, `${prompt(h)} docker logs --tail 6 ${id}`, ...dockerLogs(h, id), ""); openTerminal(); break;
-    case "restart": termInit(h); push(h, `${prompt(h)} docker restart ${id}`, id, `<span class="d">container restarted in 1.8 s</span>`, ""); openTerminal(); break;
+    case "logs": termInit(h); push(h, `${prompt(h)} docker logs --tail 6 ${esc(id)}`, ...dockerLogs(h, id), ""); openTerminal(); break;
+    case "restart": termInit(h); push(h, `${prompt(h)} docker restart ${esc(id)}`, esc(id), `<span class="d">container restarted in 1.8 s</span>`, ""); openTerminal(); break;
     case "compose": termInit(h); runCommand("docker compose up -d"); openTerminal(); break;
     case "run": {
       const s = SNIPPETS[Number(id)];

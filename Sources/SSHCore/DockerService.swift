@@ -16,7 +16,7 @@ public enum DockerService {
 
     public static func validate(_ ref: String) throws -> String {
         let range = NSRange(ref.startIndex..<ref.endIndex, in: ref)
-        guard ref.count <= 128, referencePattern.firstMatch(in: ref, range: range) != nil else {
+        guard ref.count <= 128, referencePattern.firstMatch(in: ref, range: range)?.range == range else {
             throw DockerError.invalidReference(ref)
         }
         return ref
@@ -31,26 +31,26 @@ public enum DockerService {
     }
 
     public static func startCommand(_ ref: String) throws -> String {
-        "docker start \(try validate(ref))"
+        "docker start \(shellQuoted(try validate(ref)))"
     }
 
     public static func stopCommand(_ ref: String) throws -> String {
-        "docker stop \(try validate(ref))"
+        "docker stop \(shellQuoted(try validate(ref)))"
     }
 
     public static func restartCommand(_ ref: String) throws -> String {
-        "docker restart \(try validate(ref))"
+        "docker restart \(shellQuoted(try validate(ref)))"
     }
 
     public static func logsCommand(_ ref: String, tail: Int) throws -> String {
         let n = max(1, tail)
-        return "docker logs --tail \(n) \(try validate(ref)) 2>&1"
+        return "docker logs --tail \(n) \(shellQuoted(try validate(ref))) 2>&1"
     }
 
     /// Interaktiv shell i en container. Körs via en PTY-kanal (`SSHSession.openShell`),
     /// därav `-it`. Faller tillbaka till `sh` om `bash` saknas.
     public static func execShellCommand(_ ref: String) throws -> String {
-        let r = try validate(ref)
+        let r = shellQuoted(try validate(ref))
         return "docker exec -it \(r) sh -c 'command -v bash >/dev/null && exec bash || exec sh'"
     }
 

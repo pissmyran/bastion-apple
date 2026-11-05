@@ -45,13 +45,78 @@ public enum ArchiveOperations {
         return "cd \(shellQuote(directory)) && zip -r -q \(shellQuote(safeArchiveName)) -- \(quotedPaths)"
     }
 
-    /// Samma `./`-prefix-behov som `createZipCommand` — `unzip` tolkar ett
-    /// arkivnamn som börjar med `-` som en flaggsträng, TYST (den skriver
-    /// bara ut sin hjälptext och avslutar med kod 0 — ser ut som en
-    /// lyckad körning men extraherar ingenting alls, verifierat
-    /// empiriskt, 2026-07-08).
+    /// Extract through directory descriptors so existing symlinks cannot redirect writes.
+    /// The remote host needs Python 3 with POSIX dir_fd and O_NOFOLLOW support.
     public static func extractZipCommand(archiveName: String, in directory: String) -> String {
-        "cd \(shellQuote(directory)) && unzip -o -q \(shellQuote("./" + archiveName))"
+        let script = #"""
+        import os, secrets, shutil, stat, sys, zipfile
+
+        # Validate the complete member list before making any destination changes.
+        with zipfile.ZipFile(sys.argv[1]) as archive:
+            members = []
+            for info in archive.infolist():
+                name = info.orig_filename
+                if "\x00" in name or name.startswith("/"):
+                    raise ValueError("Unsafe ZIP member path")
+                parts = [part for part in name.split("/") if part not in ("", ".")]
+                if ".." in parts or (not parts and not info.is_dir()):
+                    raise ValueError("Unsafe ZIP member path")
+                mode = (info.external_attr >> 16) if info.create_system == 3 else 0
+                kind = stat.S_IFMT(mode)
+                if kind not in (0, stat.S_IFREG, stat.S_IFDIR) or (kind == stat.S_IFDIR) != info.is_dir() and kind != 0:
+                    raise ValueError("Unsupported ZIP member type")
+                members.append((info, parts, mode))
+
+            # zipfile never yields more than a member's declared size (it fails the CRC
+            # check instead), so the declared total bounds what extraction can write.
+            needed = sum(info.file_size for info, _, _ in members)
+            if needed > shutil.disk_usage(".").free:
+                raise OSError("Not enough free space to extract the archive")
+
+            root = os.open(".", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            mask = os.umask(0)
+            os.umask(mask)
+            try:
+                for info, parts, mode in members:
+                    parent = os.dup(root)
+                    try:
+                        for part in parts if info.is_dir() else parts[:-1]:
+                            try:
+                                os.mkdir(part, 0o777, dir_fd=parent)
+                            except FileExistsError:
+                                pass
+                            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                            os.close(parent)
+                            parent = child
+                        if info.is_dir():
+                            continue
+                        try:
+                            existing = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            if not stat.S_ISREG(existing.st_mode):
+                                raise ValueError("Unsafe ZIP destination")
+                        # Write a new inode, then replace the destination. This also avoids
+                        # modifying a file outside the root through an existing hard link.
+                        temp = ".bastion-" + secrets.token_hex(16)
+                        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+                        try:
+                            with os.fdopen(fd, "wb") as target, archive.open(info) as source:
+                                shutil.copyfileobj(source, target)
+                                os.fchmod(target.fileno(), ((mode & 0o777) if mode else 0o666) & ~mask)
+                            os.replace(temp, parts[-1], src_dir_fd=parent, dst_dir_fd=parent)
+                        finally:
+                            try:
+                                os.unlink(temp, dir_fd=parent)
+                            except FileNotFoundError:
+                                pass
+                    finally:
+                        os.close(parent)
+            finally:
+                os.close(root)
+        """#
+        return "cd \(shellQuote(directory)) && python3 -c \(shellQuote(script)) \(shellQuote("./" + archiveName))"
     }
 
     // MARK: - Körning över SSH

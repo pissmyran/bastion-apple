@@ -38,6 +38,28 @@ final class S3ConnectionStoreTests: XCTestCase {
         XCTAssertEqual(s2.get(connection.id), stored)
     }
 
+    func testPersistWritesSecretsOwnerOnlyAndReplacesInsecureFile() throws {
+        let dir = NSTemporaryDirectory() + "bastion-s3perm-\(UUID().uuidString)"
+        let path = dir + "/s3connections.json"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        func permissions() throws -> Int {
+            let attributes = try FileManager.default.attributesOfItem(atPath: path)
+            return try XCTUnwrap(attributes[.posixPermissions] as? NSNumber).intValue & 0o777
+        }
+
+        let store = S3ConnectionStore(path: path)
+        let connection = makeConnection(name: "Hostup")
+        store.upsert(connection)
+        XCTAssertEqual(try permissions(), 0o600)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path)
+        store.upsert(connection)
+        XCTAssertEqual(try permissions(), 0o600)
+        XCTAssertEqual(S3ConnectionStore(path: path).get(connection.id), store.get(connection.id))
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir).filter { $0.hasPrefix(".bastion-") }
+        XCTAssertEqual(leftovers, [])
+    }
+
     func testEndpointURLParsesValidString() {
         let connection = makeConnection(name: "x")
         XCTAssertEqual(connection.endpointURL?.host, "s3.hostup.se")

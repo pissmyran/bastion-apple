@@ -175,6 +175,102 @@ final class SSHConfigTests: XCTestCase {
             "första värdet vinner — den inkluderade filen stod EFTER och ska inte skriva över")
     }
 
+    func testRepeatedNonCyclicIncludePreservesInlineContext() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host target\nInclude common\nHost other\nInclude common\nUser repeated\n", to: dir + "/config")
+        write("Host target\n", to: dir + "/common")
+        let config = SSHConfig.load(path: dir + "/config")
+        XCTAssertEqual(config.resolve("target").user, "repeated")
+        XCTAssertNil(config.resolve("other").user)
+    }
+
+    func testHardLinkCycleIsSkippedWithoutChangingTheActiveBlock() throws {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host root\nInclude nested\nUser after\n", to: dir + "/config")
+        write("Host nested\nInclude link\n", to: dir + "/nested")
+        try FileManager.default.linkItem(atPath: dir + "/config", toPath: dir + "/link")
+        let config = SSHConfig.load(path: dir + "/config")
+        XCTAssertEqual(config.resolve("nested").user, "after")
+        XCTAssertNil(config.resolve("root").user)
+    }
+
+    func testSymlinkCycleIsSkipped() throws {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host root\nInclude nested\nUser after\n", to: dir + "/config")
+        write("Host nested\nInclude link\n", to: dir + "/nested")
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link", withDestinationPath: dir + "/config")
+        let config = SSHConfig.load(path: dir + "/config")
+        XCTAssertEqual(config.resolve("nested").user, "after")
+        XCTAssertNil(config.resolve("root").user)
+    }
+
+    func testBranchingIncludesStopAtTheSharedFileBudget() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host before\nInclude level0\nHost after\n", to: dir + "/config")
+        for level in 0..<12 {
+            write("Include level\(level + 1) level\(level + 1) level\(level + 1)\n", to: dir + "/level\(level)")
+        }
+        write("Host leaf\n", to: dir + "/level12")
+        let aliases = SSHConfig.load(path: dir + "/config").hostAliases
+        XCTAssertTrue(aliases.contains("before"))
+        XCTAssertTrue(aliases.contains("leaf"))
+        XCTAssertFalse(aliases.contains("after"))
+    }
+
+    func testOversizedIncludeCannotConsumeTheRestOfTheLoad() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host before\nInclude large\nHost after\n", to: dir + "/config")
+        write("#" + String(repeating: "x", count: 8 * 1024 * 1024), to: dir + "/large")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["before"])
+        XCTAssertTrue(SSHConfig.load(path: dir + "/large").hostAliases.isEmpty)
+    }
+
+    func testRepeatedReadsShareTheByteBudget() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Include large large\nHost after\n", to: dir + "/config")
+        write("Host leaf\n#" + String(repeating: "x", count: 4 * 1024 * 1024), to: dir + "/large")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["leaf"])
+    }
+
+    func testEntryBudgetStopsParsingBeforeLaterHosts() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host before\n" + String(repeating: "User x\n", count: 100_000) + "Host after\n", to: dir + "/config")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["before"])
+    }
+
+    func testHostPatternsShareTheEntryBudget() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host before\nHost " + String(repeating: "a ", count: 100_000) + "\nHost after\n", to: dir + "/config")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["before"])
+    }
+
+    func testWildcardMatchingHasASharedWorkBudget() throws {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try FileManager.default.createDirectory(atPath: dir + "/entries", withIntermediateDirectories: true)
+        for index in 0..<110 {
+            let name = "n" + String(repeating: "a", count: 190) + String(format: "%04d", index)
+            write("", to: dir + "/entries/" + name)
+        }
+        write("Host before\nInclude entries/" + String(repeating: "*", count: 210) + "\nHost after\n", to: dir + "/config")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["before"])
+    }
+
+    func testMissingGlobPatternsShareABudget() {
+        let dir = makeConfigDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        write("Host before\n" + String(repeating: "Include missing/*\n", count: 4097) + "Host after\n", to: dir + "/config")
+        XCTAssertEqual(SSHConfig.load(path: dir + "/config").hostAliases, ["before"])
+    }
+
     // MARK: - Match
 
     /// `Match host` är den enda formen som går att avgöra utan en pågående

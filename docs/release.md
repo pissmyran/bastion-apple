@@ -15,15 +15,21 @@ The PR title becomes the commit on `main` and follows Conventional Commits. The 
 | `fix:`, `perf:`, `revert:` | patch |
 | `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:` | no release |
 
+A `Release-As: major|minor|patch|none` trailer in the commit message overrides the bump the commit type would give. A breaking change always gives a major release, whatever `Release-As` says.
+
 ## The flow
 
 1. A PR is merged to `main`.
 2. `.github/workflows/release.yml` computes the version from the commits since the latest tag, or since the commit in `.github/release-baseline` if there is no tag yet.
 3. The release waits until the checks in `.github/release-required-checks` are green on the same commit.
 4. The tag and the GitHub Release are created.
-5. The documentation is built from the tag and published on [GitHub Pages](https://pissmyran.github.io/bastion_apple/).
+5. For a stable release, `.github/workflows/docs.yml` builds the documentation from the tag and publishes it on [GitHub Pages](https://myrpisset.github.io/bastion-apple/).
 
-A merge that only contains, for example, `docs:` releases no new version, so the documentation is published at the next release.
+A merge that only contains, for example, `docs:` releases no new version, so the documentation is published at the next release. The documentation workflow also runs every hour and republishes the latest stable release.
+
+## Manual releases and release candidates
+
+`release.yml` can also be started by hand (`workflow_dispatch`). `release_type` forces a bump (`patch`, `minor`, `major`; a bump lower than the commits require makes the release fail instead of being raised) or `promote`s the active release candidate to stable. `channel: rc` creates a prerelease tag `vMAJOR.MINOR.PATCH-rc.N`; prereleases do not publish the documentation.
 
 ## Required checks
 

@@ -2,7 +2,7 @@
 
 Thanks for wanting to contribute.
 
-This repo holds Bastion for Apple. Changes to the sync format are made in [Bastion for Apple](https://github.com/pissmyran/bastion_apple); shared documentation lives in the [Bastion hub](https://github.com/pissmyran/bastion).
+This repo holds Bastion for Apple. Changes to the sync format are made in [Bastion for Apple](https://github.com/Myrpisset/bastion-apple); shared documentation lives in the [Bastion hub](https://github.com/Myrpisset/bastion).
 
 ## Reporting
 

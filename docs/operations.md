@@ -16,11 +16,24 @@ Generate the Xcode project (macOS only):
 sh App/generate-project.sh
 ```
 
+When `docs/` or `zensical.toml` changes, build the documentation the same way CI does:
+
+```bash
+pip install --upgrade zensical
+```
+
+```bash
+zensical build --clean --strict
+```
+
+The apps cannot be built on Linux. If a target could not be built or tested, say so in the pull request.
+
 ## In CI
 
 - **CodeQL** (GitHub's default setup) analyzes the code on every pull request and on `main`. Errors and serious security alerts block merging.
 - **The documentation** is built strictly with Zensical when `docs/` or `zensical.toml` changes in a pull request.
-- **The release** waits for the checks in `.github/release-required-checks`; see [Releases](release.md).
+- **The release** waits for the checks in `.github/release-required-checks` (today `Analyze (swift)`); see [Releases](release.md).
+- **The Wiki** is regenerated from `README.md` and `docs/` on every push to `main` that touches them (`.github/workflows/wiki-sync.yml`).
 
 ## Troubleshooting after a dependency change
 
@@ -40,7 +53,7 @@ Check in this order:
 
 ## CodeRabbit configuration
 
-The root `.coderabbit.yaml` inherits shared settings from `pissmyran/coderabbit`.
+The root `.coderabbit.yaml` inherits shared settings from `Myrpisset/coderabbit`.
 Keep shared settings there; local path instructions cover Apple security,
 dependency and target boundaries, credential storage and verification evidence.
 The linked Bastion hub provides shared documentation context; Linux, Windows and

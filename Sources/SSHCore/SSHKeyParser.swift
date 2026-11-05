@@ -66,7 +66,7 @@ public enum OpenSSHPrivateKey {
             _ = try pr.readStringUTF8()       // kurvnamn ("nistp256" m.fl.)
             _ = try pr.readString()           // publik punkt Q (0x04 || X || Y)
             let d = try pr.readString()       // mpint: privat skalär
-            return .ecdsa(curve: curve, scalar: Data(normalizeScalar(d, length: curve.scalarLength)))
+            return .ecdsa(curve: curve, scalar: Data(try normalizeScalar(d, length: curve.scalarLength)))
 
         default:
             throw SSHKeyError.unsupportedKeyType(keyType)
@@ -78,11 +78,16 @@ public enum OpenSSHPrivateKey {
     /// byte — CryptoKits `rawRepresentation`-initierare kräver exakt längd,
     /// men mpint-kodningen kan vara kortare (litet tal) eller en byte längre
     /// (disambigueringsbyten).
-    private static func normalizeScalar(_ bytes: [UInt8], length: Int) -> [UInt8] {
-        var b = bytes
-        while b.count > length, b.first == 0 { b.removeFirst() }
-        if b.count < length { b = Array(repeating: 0, count: length - b.count) + b }
-        return b
+    private static func normalizeScalar(_ bytes: [UInt8], length: Int) throws -> [UInt8] {
+        guard !bytes.isEmpty, bytes.count <= length + 1, bytes[0] & 0x80 == 0 else {
+            throw SSHKeyError.malformed
+        }
+        if bytes[0] == 0 {
+            guard bytes.count > 1, bytes[1] & 0x80 != 0 else { throw SSHKeyError.malformed }
+        }
+        let magnitude = bytes[0] == 0 ? bytes.dropFirst() : bytes[...]
+        guard magnitude.count <= length else { throw SSHKeyError.malformed }
+        return Array(repeating: 0, count: length - magnitude.count) + magnitude
     }
 
     /// Läser och parsar en nyckelfil från disk.

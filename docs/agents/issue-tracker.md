@@ -1,6 +1,6 @@
 # Issues
 
-GitHub Issues in `pissmyran/bastion_apple` is the repo's issue tracker.
+GitHub Issues in `Myrpisset/bastion-apple` is the repo's issue tracker.
 
 ## Working with issues
 
@@ -12,8 +12,8 @@ GitHub Issues in `pissmyran/bastion_apple` is the repo's issue tracker.
 
 `gh issue` does not work in cloud sessions (GraphQL is disabled). Use REST:
 
-- Read: `gh api repos/pissmyran/bastion_apple/issues/<n>` and `…/issues/<n>/comments`
-- List open: `gh api 'repos/pissmyran/bastion_apple/issues?state=open'`
-- Create: `gh api repos/pissmyran/bastion_apple/issues -f title='…' -f body='…'`
-- Comment: `gh api repos/pissmyran/bastion_apple/issues/<n>/comments -f body='…'`
-- Close: `gh api -X PATCH repos/pissmyran/bastion_apple/issues/<n> -f state=closed`
+- Read: `gh api repos/Myrpisset/bastion-apple/issues/<n>` and `…/issues/<n>/comments`
+- List open: `gh api 'repos/Myrpisset/bastion-apple/issues?state=open'`
+- Create: `gh api repos/Myrpisset/bastion-apple/issues -f title='…' -f body='…'`
+- Comment: `gh api repos/Myrpisset/bastion-apple/issues/<n>/comments -f body='…'`
+- Close: `gh api -X PATCH repos/Myrpisset/bastion-apple/issues/<n> -f state=closed`
