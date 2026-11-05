@@ -32,6 +32,8 @@ final class S3ClientTests: XCTestCase {
     /// (se S3Client.swifts huvudkommentar). Låser signeringskedjan mot
     /// regression utan att vara beroende av "nu".
     func testSigV4MatchesVerifiedReferenceVector() {
+        // The example credentials from AWS's public documentation, not real
+        // secrets. The expected signature below only holds for these values.
         let credentials = S3Credentials(
             accessKeyID: "AKIDEXAMPLE",
             secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
