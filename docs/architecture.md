@@ -32,6 +32,12 @@ Reading `~/.ssh/config` expands `Include` inline, skips cycles and reads only re
 
 Importing an SSH config adds only aliases that do not exist yet and never changes existing hosts. A host whose `ProxyJump` cannot be linked (unresolved, pointing at itself, several hops, or a jump host that has its own jump, since connections support one hop) is skipped together with the hosts that depend on it, so the app never connects directly to a host that is meant to be reached through a jump.
 
+Remote port forwarding reserves each remote port once per session, whatever the bind host. Port 0 (a server-assigned port) is allowed only while no other port is reserved. A listen request that gets no answer within 30 seconds fails and closes the session. `close()` stops routing, waits up to one second for the server to confirm the cancellation and releases the reservation only on that confirmation; a listen or cancel with an uncertain outcome keeps its reservation for the rest of the session.
+
+`ExternalBinaryFetcher` caches a downloaded binary at `cacheDir/<checksum>/<binaryName>`. The SHA-256 is verified before the file is renamed into place, so a failed or mismatching download leaves an existing cache entry untouched.
+
+The tvOS OAuth token store keeps tokens in the Keychain. It is compiled outside Xcode, with an in-memory Keychain, by `Tests/TVAppTests/run-token-store-tests.sh` (Linux only).
+
 The package declares macOS 13 and iOS 16 as minimum platforms.
 
 ## The apps
