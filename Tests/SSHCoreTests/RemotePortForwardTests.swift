@@ -281,6 +281,35 @@ final class RemotePortForwardTests: XCTestCase {
         await session.close()
     }
 
+    func testUnansweredListenRequestTimesOutAndClosesSession() async throws {
+        let delegate = ControlledForwardDelegate()
+        let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)
+        defer { server.shutdown() }
+        let session = SSHSession(target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                                 auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        session.remoteForwardListenTimeout = .milliseconds(200)
+
+        // The server never answers the listen request.
+        do {
+            _ = try await withTimeout(seconds: 5) {
+                try await session.openRemotePortForward(bindPort: 0, targetHost: "first", targetPort: 1)
+            }
+            XCTFail("an unanswered listen request must time out")
+        } catch let error as SSHError {
+            guard case .channelFailed(let message) = error else { return XCTFail("unexpected \(error)") }
+            XCTAssertTrue(message.contains("timed out"), message)
+        }
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 1)
+
+        // The uncertain reservation can no longer block a live session: it is closed.
+        do {
+            _ = try await session.openRemotePortForward(bindPort: 45679, targetHost: "second", targetPort: 2)
+            XCTFail("the session must be closed after the timeout")
+        } catch { }
+        XCTAssertEqual(delegate.requests.withLockedValue { $0.count }, 1)
+    }
+
     func testInvalidAllocatedPortKeepsReservation() async throws {
         let delegate = ControlledForwardDelegate()
         let server = try LoopbackServer.start(password: "hunter2", globalRequestDelegate: delegate)

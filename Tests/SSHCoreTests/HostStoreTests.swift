@@ -330,6 +330,9 @@ final class HostStoreTests: XCTestCase {
         Host multi
             User a
             ProxyJump direct,missing
+        Host behind-multi
+            User a
+            ProxyJump multi
         Host direct
             User a
         Host no-jump

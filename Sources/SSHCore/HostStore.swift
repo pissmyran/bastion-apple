@@ -109,9 +109,16 @@ public final class HostStore: @unchecked Sendable {
         return merged
     }
 
-    /// Importerar värdar från en `~/.ssh/config`-text. Alias som redan finns
-    /// (skiftlägesokänsligt) hoppas över så re-import inte dubblerar. Returnerar
-    /// de faktiskt tillagda värdarna.
+    /// Imports hosts from `~/.ssh/config` text.
+    ///
+    /// Aliases that already exist (case-insensitive) are skipped, so importing
+    /// again does not duplicate them. A new host is also skipped when its
+    /// `ProxyJump` cannot be linked: a chain of several jumps, or a jump to an
+    /// alias that is not in the store or the config. So are the new hosts that
+    /// jump through such a host. Existing hosts are never changed.
+    ///
+    /// - Returns: The hosts that were actually added, with `jumpHostID` linked.
+    /// - Note: The added hosts are stored in the host list.
     @discardableResult
     public func importSSHConfig(_ text: String) -> [Host] {
         let config = SSHConfig(text: text)

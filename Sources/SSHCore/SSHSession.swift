@@ -69,6 +69,9 @@ public final class SSHSession {
     // The wire routing key is only the port, so each port must be reserved
     // before a listen request and until cancellation is confirmed.
     let remoteForwards = NIOLockedValueBox<[Int: RemoteForwardReservation]>([:])
+    /// How long a remote listen request may stay unanswered before the session
+    /// is closed. Internal so tests can shorten it.
+    var remoteForwardListenTimeout: TimeAmount = .seconds(30)
 
     public init(target: SSHTarget, auth: SSHAuth, knownHosts: KnownHosts = KnownHosts()) {
         self.target = target

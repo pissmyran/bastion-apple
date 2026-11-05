@@ -192,6 +192,8 @@ extension SSHSession {
     }
 }
 
+private struct RemoteForwardListenTimeout: Error {}
+
 // All mutable fields are protected by SSHSession.remoteForwards' lock.
 final class RemoteForwardReservation: @unchecked Sendable {
     let targetHost: String
@@ -231,8 +233,11 @@ public final class RemotePortForward {
         self.targetPort = targetPort
     }
 
-    /// Removes the local route and sends a best-effort cancellation without
-    /// waiting for a reply from the server.
+    /// Stops routing inbound channels for this forward and sends a
+    /// cancellation. Waits up to one second for the server's reply. The port
+    /// reservation is released only once the server confirms the cancellation;
+    /// otherwise it stays reserved for the rest of the session, because the
+    /// server may still be listening.
     public func close() async {
         guard let session, let channel = session.channel else { return }
         let shouldCancel = session.remoteForwards.withLockedValue { forwards in
@@ -355,10 +360,25 @@ extension SSHSession {
         channel.eventLoop.execute {
             sshHandler.sendTCPForwardingRequest(.listen(host: bindHost, port: bindPort), promise: promise)
         }
+        // A server that keeps the connection open but never answers must not
+        // hang this call, or hold the reservation, indefinitely.
+        let outcome = channel.eventLoop.makePromise(of: Int.self)
+        result.cascade(to: outcome)
+        let timer = channel.eventLoop.scheduleTask(in: remoteForwardListenTimeout) {
+            outcome.fail(RemoteForwardListenTimeout())
+        }
         let actualBindPort: Int
         do {
-            actualBindPort = try await result.get()
+            actualBindPort = try await outcome.futureResult.get()
+            timer.cancel()
         } catch {
+            timer.cancel()
+            if error is RemoteForwardListenTimeout {
+                // Whether the server is listening is unknown, so the reservation
+                // stays. Closing the session is the only way to make that safe.
+                await close()
+                throw SSHError.channelFailed("remote forward listen request timed out; session closed")
+            }
             // Only an explicit refusal proves the listener was not created.
             // Keep the reservation for an uncertain outcome until the session ends.
             if let error = error as? NIOSSHError, error.type == .globalRequestRefused {

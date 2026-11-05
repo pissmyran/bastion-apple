@@ -52,7 +52,7 @@ Test the CLI password prompt (after `swift build`; needs Python 3 and a POSIX te
 python3 Tests/cli_password_prompt_test.py
 ```
 
-Test the tvOS OAuth token store outside Xcode (compiles `App/TVApp/TVOAuthTokenStore.swift` with an in-memory Keychain):
+Test the tvOS OAuth token store outside Xcode (Linux only; compiles `App/TVApp/TVOAuthTokenStore.swift` with an in-memory Keychain):
 
 ```bash
 bash Tests/TVAppTests/run-token-store-tests.sh

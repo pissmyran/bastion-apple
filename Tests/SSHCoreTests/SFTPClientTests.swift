@@ -275,17 +275,22 @@ final class SFTPClientTests: XCTestCase {
             }
         }
 
-        let escaped = "../../outside"
-        try await rejected { _ = try await sftp.readFile(escaped) }
-        try await rejected { try await sftp.writeFile(escaped, data: [2]) }
-        try await rejected { _ = try await sftp.stat(escaped) }
+        // The server root is a sibling of `outside` in the temporary directory,
+        // so this path reaches the real directory if traversal protection fails.
+        let escaped = "../" + (outside as NSString).lastPathComponent
+        XCTAssertEqual(
+            ((server.sftpRoot + "/" + escaped) as NSString).standardizingPath, outside,
+            "the traversal path must resolve to the directory created above")
+        try await rejected { _ = try await sftp.readFile(escaped + "/victim") }
+        try await rejected { try await sftp.writeFile(escaped + "/new", data: [2]) }
+        try await rejected { _ = try await sftp.stat(escaped + "/victim") }
         try await rejected { _ = try await sftp.listDirectory(escaped) }
-        try await rejected { try await sftp.mkdir(escaped) }
-        try await rejected { try await sftp.remove(escaped) }
+        try await rejected { try await sftp.mkdir(escaped + "/newdir") }
+        try await rejected { try await sftp.remove(escaped + "/victim") }
         try await rejected { try await sftp.rmdir(escaped) }
-        try await rejected { try await sftp.rename(escaped, to: "new") }
-        try await rejected { try await sftp.rename("inside", to: escaped) }
-        try await rejected { try await sftp.setPermissions(escaped, mode: 0o777) }
+        try await rejected { try await sftp.rename("inside", to: escaped + "/moved") }
+        try await rejected { try await sftp.rename(escaped + "/victim", to: "stolen") }
+        try await rejected { try await sftp.setPermissions(escaped + "/victim", mode: 0o777) }
         try await rejected { _ = try await sftp.readFile("link/victim") }
         try await rejected { try await sftp.writeFile("link/victim", data: [3]) }
         try await rejected { try await sftp.remove("link/victim") }
@@ -294,7 +299,12 @@ final class SFTPClientTests: XCTestCase {
 
         XCTAssertEqual(try String(contentsOfFile: victim, encoding: .utf8), "original")
         XCTAssertTrue(fm.fileExists(atPath: server.sftpRoot + "/inside"))
-        XCTAssertFalse(fm.fileExists(atPath: outside + "/new"))
+        for name in ["new", "newdir", "moved"] {
+            XCTAssertFalse(fm.fileExists(atPath: outside + "/" + name), name)
+        }
+        XCTAssertFalse(fm.fileExists(atPath: server.sftpRoot + "/stolen"))
+        let victimMode = try fm.attributesOfItem(atPath: victim)[.posixPermissions] as? NSNumber
+        XCTAssertNotEqual(victimMode?.intValue, 0o777)
         await sftp.close()
         await session.close()
     }

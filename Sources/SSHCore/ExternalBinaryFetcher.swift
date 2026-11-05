@@ -30,11 +30,12 @@ public enum ExternalBinaryError: Error, Sendable, Equatable {
 }
 
 public enum ExternalBinaryFetcher {
-    /// Hämtar `url` till `cacheDir/binaryName` om den inte redan finns där
-    /// med RÄTT checksumma (idempotent — ett andra anrop med samma
+    /// Hämtar `url` till `cacheDir/<checksum>/binaryName` om den inte redan
+    /// finns där med RÄTT checksumma (idempotent — ett andra anrop med samma
     /// parametrar gör ingen nätverkstrafik alls). En redan cachad fil med FEL
-    /// checksumma (korrupt/manipulerad) tas bort och laddas ner på nytt,
-    /// aldrig litad på tyst.
+    /// checksumma (korrupt/manipulerad) laddas ner på nytt och ersätts
+    /// atomärt först när den nya filen är verifierad; den gamla lämnas
+    /// orörd om nedladdningen misslyckas, aldrig litad på tyst.
     ///
     /// Checksumman verifieras mot de NEDLADDADE bytesen INNAN något skrivs
     /// till disk — en manipulerad/fel binär hamnar aldrig i cachen ens
@@ -63,9 +64,9 @@ public enum ExternalBinaryFetcher {
         if let existing = cachedData(at: destination), sha256Hex(existing) == expected {
             return destination
         }
-        // Finns men med fel checksumma (korrupt eller ett gammalt, felaktigt
-        // cachat försök) — städa bort tyst, hämta rent på nytt nedan.
-        try? FileManager.default.removeItem(at: destination)
+        // A missing or corrupt entry is replaced only after a verified download
+        // is ready (see the rename below). Removing it here could delete a valid
+        // file that a concurrent fetch installed in the meantime.
 
         let data: Data
         do {
@@ -95,6 +96,12 @@ public enum ExternalBinaryFetcher {
             defer { _ = unlink(tmp.path) }
             try data.write(to: tmp)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tmp.path)
+            // rename(2) cannot replace a directory, so clear that case only now
+            // that the verified file is ready.
+            var existing = stat()
+            if lstat(destination.path, &existing) == 0, (existing.st_mode & mode_t(S_IFMT)) == mode_t(S_IFDIR) {
+                try FileManager.default.removeItem(at: destination)
+            }
             // rename(2) replaces atomically: a concurrent fetch of the same
             // checksum cannot fail on an existing file or expose a missing one.
             guard rename(tmp.path, destination.path) == 0 else {

@@ -3,6 +3,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import NIOConcurrencyHelpers
 import XCTest
 @testable import SSHCore
 
@@ -210,6 +211,58 @@ final class ExternalBinaryFetcherPathTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: second), StubBinaryURLProtocol.otherData)
     }
 
+    /// An entry is replaced only once a verified download is ready. Removing it
+    /// earlier could delete a valid file that a concurrent fetch installed after
+    /// this one validated the entry, and a failed download would then leave the
+    /// other caller with a URL that no longer exists.
+    func testFailedDownloadLeavesExistingEntryInPlace() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let checksum = ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data)
+        let destination = cache.appendingPathComponent(checksum).appendingPathComponent("sample")
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("corrupt".utf8).write(to: destination)
+        // The file must still exist while the replacement is being downloaded.
+        let existedDuringDownload = NIOLockedValueBox(false)
+        StubBinaryURLProtocol.onRaceRequest = {
+            existedDuringDownload.withLockedValue {
+                $0 = FileManager.default.fileExists(atPath: destination.path)
+            }
+        }
+        defer { StubBinaryURLProtocol.onRaceRequest = nil }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+
+        do {
+            _ = try await ExternalBinaryFetcher.fetch(
+                url: URL(string: "https://example.com/race")!, expectedSHA256: checksum,
+                cacheDir: cache, binaryName: "sample", session: session)
+            XCTFail("The download fails with HTTP 500")
+        } catch ExternalBinaryError.downloadFailed {
+        }
+
+        XCTAssertTrue(existedDuringDownload.withLockedValue { $0 })
+        XCTAssertEqual(try Data(contentsOf: destination), Data("corrupt".utf8))
+    }
+
+    func testDirectoryInPlaceOfCachedFileIsReplacedAfterDownload() async throws {
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let checksum = ExternalBinaryFetcher.sha256Hex(StubBinaryURLProtocol.data)
+        let destination = cache.appendingPathComponent(checksum).appendingPathComponent("sample")
+        try FileManager.default.createDirectory(
+            at: destination.appendingPathComponent("nested"), withIntermediateDirectories: true)
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+
+        let result = try await ExternalBinaryFetcher.fetch(
+            url: URL(string: "https://example.com/binary")!, expectedSHA256: checksum,
+            cacheDir: cache, binaryName: "sample", session: session)
+
+        XCTAssertEqual(try Data(contentsOf: result), StubBinaryURLProtocol.data)
+    }
+
     func testConcurrentFetchesOfTheSameChecksumAllSucceed() async throws {
         let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cache) }
@@ -239,7 +292,18 @@ private final class StubBinaryURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// Runs when a request for `/race` arrives, before the failure response.
+    nonisolated(unsafe) static var onRaceRequest: (() -> Void)?
+
     override func startLoading() {
+        if request.url!.lastPathComponent == "race" {
+            Self.onRaceRequest?()
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(
+                url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!,
+                cacheStoragePolicy: .notAllowed)
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: request.url!.lastPathComponent == "other" ? Self.otherData : Self.data)
