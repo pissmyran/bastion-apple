@@ -1,9 +1,9 @@
 [project]
 site_name = "Bastion for Apple"
-site_url = "https://myrpisset.github.io/bastion-apple/"
+site_url = "https://pissmyran.github.io/bastion-apple/"
 site_description = "The SSH client for iPhone, iPad, Mac and Apple TV, built on the shared Swift core SSHCore."
-repo_url = "https://github.com/Myrpisset/bastion-apple"
-repo_name = "Myrpisset/bastion-apple"
+repo_url = "https://github.com/Pissmyran/bastion-apple"
+repo_name = "Pissmyran/bastion-apple"
 edit_uri = "edit/main/docs/"
 docs_dir = "docs"
 site_dir = "site"
