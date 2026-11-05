@@ -290,19 +290,17 @@ final class HostStoreTests: XCTestCase {
             ProxyJump existing
         """
         let imported = store.importSSHConfig(config)
-        XCTAssertEqual(imported.count, 2)
-        let target = try XCTUnwrap(imported.first { $0.alias == "target" })
-        let jump = try XCTUnwrap(imported.first { $0.alias == "jump" })
-        XCTAssertEqual(target.jumpHostID, jump.id)
+        // `target` would need two hops (target -> jump -> existing): skipped.
+        XCTAssertEqual(imported.map(\.alias), ["jump"])
+        let jump = try XCTUnwrap(imported.first)
         XCTAssertEqual(jump.jumpHostID, existing.id)
         XCTAssertTrue(store.importSSHConfig(config).isEmpty)
 
         let reloaded = HostStore(path: path)
         XCTAssertEqual(reloaded.get(existing.id), original)
-        XCTAssertEqual(reloaded.get(target.id)?.jumpHostID, jump.id)
         XCTAssertEqual(reloaded.get(jump.id)?.jumpHostID, existing.id)
         XCTAssertNotNil(reloaded.exportState().tombstones[deleted.id])
-        XCTAssertEqual(reloaded.all().count, 3)
+        XCTAssertEqual(reloaded.all().count, 2)
     }
 
     func testConcurrentImportsDoNotDuplicateAliases() {
@@ -314,22 +312,112 @@ final class HostStoreTests: XCTestCase {
         XCTAssertEqual(store.all().map(\.alias), ["server"])
     }
 
-    /// Pekar ProxyJump på något som inte importerades ska värden ändå sparas,
-    /// bara utan koppling. En värd som anger sig själv länkas inte heller.
-    func testAnUnresolvableOrSelfReferentialProxyJumpStillImports() {
+    func testUnresolvedJumpsAndTheirDependentsAreNotImported() {
         let store = HostStore(path: nil)
         let imported = store.importSSHConfig("""
-        Host inre
-            HostName 10.0.0.9
+        Host dependent
             User a
-            ProxyJump finns-inte
-        Host sig-sjalv
-            HostName x.example
+            ProxyJump middle
+        Host middle
             User a
-            ProxyJump sig-sjalv
+            ProxyJump missing
+        Host self
+            User a
+            ProxyJump self
+        Host empty
+            User a
+            ProxyJump ""
+        Host multi
+            User a
+            ProxyJump direct,missing
+        Host behind-multi
+            User a
+            ProxyJump multi
+        Host direct
+            User a
+        Host no-jump
+            User a
+            ProxyJump NoNe
         """)
-        XCTAssertEqual(imported.count, 2)
+        XCTAssertEqual(imported.map(\.alias), ["direct", "no-jump"])
         XCTAssertTrue(imported.allSatisfy { $0.jumpHostID == nil })
+        XCTAssertEqual(store.all().map(\.alias), ["direct", "no-jump"])
+    }
+
+    func testImportResolvesExistingJumpAndPreservesExistingHost() throws {
+        let store = HostStore(path: nil)
+        let jump = Host(alias: "Jump", hostName: "existing.example", user: "a")
+        store.upsert(jump)
+        let original = try XCTUnwrap(store.get(jump.id))
+        let imported = store.importSSHConfig("""
+        Host target
+            User a
+            ProxyJump jump
+        Host JUMP
+            User other
+            HostName changed.example
+        """)
+        let target = try XCTUnwrap(imported.first)
+        XCTAssertEqual(imported.count, 1)
+        XCTAssertEqual(target.jumpHostID, jump.id)
+        XCTAssertEqual(store.get(target.id)?.jumpHostID, jump.id)
+        XCTAssertEqual(store.get(jump.id), original)
+        let result = ConnectionPlanning.plan(targetAuth: .password(TestCredentials.targetPassword),
+                                             jumpHostID: target.jumpHostID,
+                                             jumpHost: store.get(jump.id),
+                                             jumpAuth: .password(TestCredentials.jumpPassword))
+        XCTAssertEqual(try result.get().jump?.target.host, jump.hostName)
+    }
+
+    func testSkippedHostCanBeReimportedAfterAddingJump() throws {
+        let store = HostStore(path: nil)
+        let config = """
+        Host target
+            User a
+            ProxyJump jump
+        """
+        XCTAssertTrue(store.importSSHConfig(config).isEmpty)
+        let jump = Host(alias: "jump", hostName: "jump.example", user: "a")
+        store.upsert(jump)
+        let target = try XCTUnwrap(store.importSSHConfig(config).first)
+        XCTAssertEqual(target.jumpHostID, jump.id)
+        XCTAssertEqual(store.get(target.id)?.jumpHostID, jump.id)
+        XCTAssertTrue(store.importSSHConfig(config).isEmpty)
+    }
+
+    func testImportedCycleCannotConnectDirectly() throws {
+        let store = HostStore(path: nil)
+        let imported = store.importSSHConfig("""
+        Host a
+            User a
+            ProxyJump b
+        Host b
+            User a
+            ProxyJump a
+        """)
+        // Each host's jump has a jump of its own, so neither can be linked;
+        // both are skipped rather than imported without their jump.
+        XCTAssertEqual(imported.count, 0)
+        XCTAssertTrue(store.all().isEmpty)
+    }
+
+    func testJumpToAHostWithItsOwnJumpIsNotImported() throws {
+        let store = HostStore(path: nil)
+        let existingJump = Host(alias: "outer", hostName: "outer.example", user: "u")
+        store.upsert(existingJump)
+        var nested = Host(alias: "inner", hostName: "inner.example", user: "u")
+        nested.jumpHostID = existingJump.id
+        store.upsert(nested)
+        let imported = store.importSSHConfig("""
+        Host target
+            User u
+            ProxyJump inner
+        Host direct
+            User u
+            ProxyJump outer
+        """)
+        XCTAssertEqual(imported.map(\.alias), ["direct"])
+        XCTAssertEqual(imported.first?.jumpHostID, existingJump.id)
     }
 
     /// Formerna `ProxyJump` skrivs i.

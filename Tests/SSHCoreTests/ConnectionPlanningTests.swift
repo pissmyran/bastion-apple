@@ -28,7 +28,7 @@ final class ConnectionPlanningTests: XCTestCase {
 
     func testDirectSuccessWithoutJumpHost() {
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("p"), jumpHostID: nil, jumpHost: nil, jumpAuth: nil)
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: nil, jumpHost: nil, jumpAuth: nil)
         guard case .success(let plan) = result else { return XCTFail("förväntade success") }
         XCTAssertNil(plan.jump)
     }
@@ -42,7 +42,7 @@ final class ConnectionPlanningTests: XCTestCase {
     func testSuccessThroughJumpHost() {
         let jump = makeHost()
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("target"), jumpHostID: jump.id, jumpHost: jump, jumpAuth: .password("jump"))
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: jump.id, jumpHost: jump, jumpAuth: .password(TestCredentials.jumpPassword))
         guard case .success(let plan) = result, let jumpPlan = plan.jump else {
             return XCTFail("förväntade success med jump")
         }
@@ -51,7 +51,7 @@ final class ConnectionPlanningTests: XCTestCase {
 
     func testJumpHostMissingFromStore() {
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("target"), jumpHostID: UUID(), jumpHost: nil, jumpAuth: nil)
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: UUID(), jumpHost: nil, jumpAuth: nil)
         assertFailure(result, .jumpHostMissing)
     }
 
@@ -61,21 +61,21 @@ final class ConnectionPlanningTests: XCTestCase {
     func testJumpHostIDMismatchTreatedAsMissing() {
         let wrongHost = makeHost()
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("target"), jumpHostID: UUID(), jumpHost: wrongHost, jumpAuth: .password("jump"))
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: UUID(), jumpHost: wrongHost, jumpAuth: .password(TestCredentials.jumpPassword))
         assertFailure(result, .jumpHostMissing)
     }
 
     func testJumpHostNestedIsRejected() {
         let nestedJump = makeHost(jumpHostID: UUID())
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("target"), jumpHostID: nestedJump.id, jumpHost: nestedJump, jumpAuth: .password("jump"))
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: nestedJump.id, jumpHost: nestedJump, jumpAuth: .password(TestCredentials.jumpPassword))
         assertFailure(result, .jumpHostNested)
     }
 
     func testJumpAuthFailed() {
         let jump = makeHost()
         let result = ConnectionPlanning.plan(
-            targetAuth: .password("target"), jumpHostID: jump.id, jumpHost: jump, jumpAuth: nil)
+            targetAuth: .password(TestCredentials.targetPassword), jumpHostID: jump.id, jumpHost: jump, jumpAuth: nil)
         assertFailure(result, .jumpAuthFailed)
     }
 }

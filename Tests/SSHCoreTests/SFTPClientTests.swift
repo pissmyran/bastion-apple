@@ -6,13 +6,13 @@ final class SFTPClientTests: XCTestCase {
     private func connectedSession(_ server: LoopbackServer) async throws -> SSHSession {
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         return session
     }
 
     func testRealpathResolvesRelativeToRoot() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -25,7 +25,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testWriteThenReadFileRoundTrips() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -40,7 +40,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testWriteFileLargerThanOneChunk() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -56,7 +56,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testListDirectoryFindsWrittenFiles() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -78,7 +78,7 @@ final class SFTPClientTests: XCTestCase {
         // POSIX-filtypsbitarna (S_IFDIR/S_IFREG), inte bara behörighets-
         // bitarna — annars kan en klient (SFTPBrowserView) inte skilja mapp
         // från fil utan ett extra STAT-anrop per post.
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -97,7 +97,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testMkdirRmdirRoundTrip() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -118,7 +118,7 @@ final class SFTPClientTests: XCTestCase {
     /// samma sandlåda-mönster som testservern använder överallt) — inte bara
     /// att servern svarar OK, utan att behörigheten faktiskt ändrades.
     func testSetPermissionsChangesRealFileMode() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -144,7 +144,7 @@ final class SFTPClientTests: XCTestCase {
     /// applicerar det -> filen på disk har verkligen det värdet efteråt
     /// (inte bara att servern svarade OK).
     func testChownChangesRealFileOwnership() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -166,7 +166,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testRemoveDeletesFile() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -181,7 +181,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testRenameMovesFile() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -199,7 +199,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testStatReturnsFileSize() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -213,7 +213,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testReadingMissingFileThrowsNoSuchFile() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -234,7 +234,7 @@ final class SFTPClientTests: XCTestCase {
         // "../"-segment fick tidigare lämna sandlådan (server.sftpRoot) och
         // nå riktiga filer på testmaskinen. Ett skadligt/buggigt klientanrop
         // ska svaras som "hittades inte", inte lyckas läsa något utanför roten.
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -250,8 +250,101 @@ final class SFTPClientTests: XCTestCase {
         await session.close()
     }
 
+    func testRejectedPathsCannotTouchFallbackOrFollowSymlinks() async throws {
+        let server = try LoopbackServer.start(password: TestCredentials.password)
+        defer { server.shutdown() }
+        let fm = FileManager.default
+        let outside = NSTemporaryDirectory() + "bastion-outside-\(UUID().uuidString)"
+        try fm.createDirectory(atPath: outside, withIntermediateDirectories: false)
+        defer { try? fm.removeItem(atPath: outside) }
+        let victim = outside + "/victim"
+        try "original".write(toFile: victim, atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(atPath: server.sftpRoot + "/__blocked_path_traversal__", withDestinationPath: victim)
+        try fm.createSymbolicLink(atPath: server.sftpRoot + "/link", withDestinationPath: outside)
+
+        let session = try await connectedSession(server)
+        let sftp = try await SFTPClient.open(on: session)
+        try await sftp.writeFile("inside", data: [1])
+
+        func rejected(_ operation: () async throws -> Void) async throws {
+            do {
+                try await operation()
+                XCTFail("Expected path rejection")
+            } catch let error as SFTPStatusError {
+                XCTAssertEqual(error.code, .noSuchFile)
+            }
+        }
+
+        // The server root is a sibling of `outside` in the temporary directory,
+        // so this path reaches the real directory if traversal protection fails.
+        let escaped = "../" + (outside as NSString).lastPathComponent
+        XCTAssertEqual(
+            ((server.sftpRoot + "/" + escaped) as NSString).standardizingPath, outside,
+            "the traversal path must resolve to the directory created above")
+        try await rejected { _ = try await sftp.readFile(escaped + "/victim") }
+        try await rejected { try await sftp.writeFile(escaped + "/new", data: [2]) }
+        try await rejected { _ = try await sftp.stat(escaped + "/victim") }
+        try await rejected { _ = try await sftp.listDirectory(escaped) }
+        try await rejected { try await sftp.mkdir(escaped + "/newdir") }
+        try await rejected { try await sftp.remove(escaped + "/victim") }
+        try await rejected { try await sftp.rmdir(escaped) }
+        try await rejected { try await sftp.rename("inside", to: escaped + "/moved") }
+        try await rejected { try await sftp.rename(escaped + "/victim", to: "stolen") }
+        try await rejected { try await sftp.setPermissions(escaped + "/victim", mode: 0o777) }
+        try await rejected { _ = try await sftp.readFile("link/victim") }
+        try await rejected { try await sftp.writeFile("link/victim", data: [3]) }
+        try await rejected { try await sftp.remove("link/victim") }
+        try await rejected { try await sftp.mkdir("link/new") }
+        try await rejected { try await sftp.setPermissions(".\0/ignored", mode: 0o777) }
+
+        XCTAssertEqual(try String(contentsOfFile: victim, encoding: .utf8), "original")
+        XCTAssertTrue(fm.fileExists(atPath: server.sftpRoot + "/inside"))
+        for name in ["new", "newdir", "moved"] {
+            XCTAssertFalse(fm.fileExists(atPath: outside + "/" + name), name)
+        }
+        XCTAssertFalse(fm.fileExists(atPath: server.sftpRoot + "/stolen"))
+        let victimMode = try fm.attributesOfItem(atPath: victim)[.posixPermissions] as? NSNumber
+        XCTAssertNotEqual(victimMode?.intValue, 0o777)
+        await sftp.close()
+        await session.close()
+    }
+
+    func testSFTPRootRemainsPrivateAndCannotBeReplaced() async throws {
+        let server = try LoopbackServer.start(password: TestCredentials.password)
+        defer { server.shutdown() }
+        let fm = FileManager.default
+        let session = try await connectedSession(server)
+        let sftp = try await SFTPClient.open(on: session)
+
+        func rootMode() throws -> UInt16 {
+            let attrs = try fm.attributesOfItem(atPath: server.sftpRoot)
+            return (attrs[.posixPermissions] as? NSNumber)?.uint16Value ?? 0
+        }
+        XCTAssertEqual(try rootMode() & 0o777, 0o700)
+
+        func denied(_ operation: () async throws -> Void) async throws {
+            do {
+                try await operation()
+                XCTFail("Expected root protection")
+            } catch let error as SFTPStatusError {
+                XCTAssertEqual(error.code, .permissionDenied)
+            }
+        }
+        try await denied { try await sftp.setPermissions("/", mode: 0o777) }
+        try await denied { try await sftp.chown("./", uid: UInt32(getuid()), gid: UInt32(getgid())) }
+        try await denied { try await sftp.rmdir(".") }
+        try await denied { try await sftp.remove("/") }
+        try await denied { try await sftp.rename(".", to: "moved") }
+        XCTAssertEqual(try rootMode() & 0o777, 0o700)
+        try await sftp.writeFile("still-usable", data: [42])
+        let contents = try await sftp.readFile("still-usable")
+        XCTAssertEqual(contents, [42])
+        await sftp.close()
+        await session.close()
+    }
+
     func testWriteFileRejectsZeroChunkSize() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -268,7 +361,7 @@ final class SFTPClientTests: XCTestCase {
     }
 
     func testReadFileRejectsZeroChunkSize() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -292,7 +385,7 @@ final class SFTPClientTests: XCTestCase {
         // åtminstone att en efterföljande, orelaterad operation fortfarande
         // fungerar normalt (dvs. att klienten/kanalen inte hamnar i ett
         // trasigt tillstånd av det normala, lyckade fallet).
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)
@@ -312,7 +405,7 @@ final class SFTPClientTests: XCTestCase {
         // serialiserar pending-tabellen, men själva förfrågningarna skickas
         // koncurrent här för att bevisa att inget kapplöpningstillstånd
         // uppstår i id-tilldelningen/dispatchen).
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = try await connectedSession(server)
         let sftp = try await SFTPClient.open(on: session)

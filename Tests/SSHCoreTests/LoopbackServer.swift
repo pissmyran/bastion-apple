@@ -4,17 +4,47 @@ import NIOCore
 import NIOPosix
 import NIOSSH
 import NIOConcurrencyHelpers
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 @testable import SSHCore
+
+/// Secrets used by the tests (passwords, passphrases, keys, tokens). They are generated for each
+/// test process, so no credential is committed to the repository.
+enum TestCredentials {
+    static let password = "pw-" + UUID().uuidString
+    static let jumpPassword = "pw-" + UUID().uuidString
+    static let targetPassword = "pw-" + UUID().uuidString
+    /// A password no test server accepts.
+    static let wrongPassword = "pw-" + UUID().uuidString
+    static let passphrase = "pass-" + UUID().uuidString
+    static let wrongPassphrase = "pass-" + UUID().uuidString
+    static let secretAccessKey = "key-" + UUID().uuidString
+    static let accessToken = "access-" + UUID().uuidString
+    static let refreshToken = "refresh-" + UUID().uuidString
+    static let newAccessToken = "access-" + UUID().uuidString
+    static let oldRefreshToken = "refresh-" + UUID().uuidString
+    static let rotatedRefreshToken = "refresh-" + UUID().uuidString
+}
 
 // En minimal SSH-server i processen, enbart för test. Accepterar ett lösenord
 // och svarar på exec-förfrågningar med "ran: <kommando>\n" + exit 0.
 
 final class ServerAuth: NIOSSHServerUserAuthenticationDelegate {
-    let password: String
-    init(password: String) { self.password = password }
+    let password: String?
+    let authorizedPublicKey: NIOSSHPublicKey?
+    init(password: String?, authorizedPublicKey: NIOSSHPublicKey?) {
+        self.password = password
+        self.authorizedPublicKey = authorizedPublicKey
+    }
 
     var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods {
-        [.password, .publicKey]
+        var methods: NIOSSHAvailableUserAuthenticationMethods = []
+        if password != nil { methods.insert(.password) }
+        if authorizedPublicKey != nil { methods.insert(.publicKey) }
+        return methods
     }
 
     func requestReceived(
@@ -23,10 +53,9 @@ final class ServerAuth: NIOSSHServerUserAuthenticationDelegate {
     ) {
         switch request.request {
         case .password(let p):
-            responsePromise.succeed(p.password == password ? .success : .failure)
-        case .publicKey:
-            // NIOSSH har redan verifierat signaturen; testservern godtar nyckeln.
-            responsePromise.succeed(.success)
+            responsePromise.succeed(password != nil && p.password == password ? .success : .failure)
+        case .publicKey(let key):
+            responsePromise.succeed(key.publicKey == authorizedPublicKey ? .success : .failure)
         default:
             responsePromise.succeed(.failure)
         }
@@ -57,10 +86,9 @@ final class ServerExecHandler: ChannelDuplexHandler, RemovableChannelHandler {
     /// "ran: <kommando>\n"-ekot, vad de flesta exec-tester (`SSHCoreTests`,
     /// `KeyParserTests`, `KnownHostsTests`, `ProxyJumpTests` m.fl.) redan
     /// bygger på och inte ska rubbas. `true` — kör kommandot GENUINT via
-    /// `Process` (`/bin/sh -c`) med `sftpRoot` som arbetskatalog, samma
-    /// sandlåda `ServerSFTPHandler` redan använder — krävs för att bevisa
-    /// t.ex. `tar`/`zip`-arkivoperationer på RIKTIGA filer, inte bara att
-    /// rätt kommandosträng skickades.
+    /// `Process` (`/bin/sh -c`) with `sftpRoot` as its working directory.
+    /// This is not a sandbox: commands run with the test process's privileges.
+    /// A per-instance client key protects real tar/zip operations on real files.
     init(
         sftpRoot: String, realExec: Bool = false,
         observedWindowChanges: NIOLockedValueBox<[(cols: Int, rows: Int)]>? = nil,
@@ -95,9 +123,10 @@ final class ServerExecHandler: ChannelDuplexHandler, RemovableChannelHandler {
             return
         }
         let outputData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        var status: Int32 = 0
-        waitpid(process.processIdentifier, &status, 0)
-        let exitCode = (status >> 8) & 0xFF
+        // `Process` reaps its own child; a manual waitpid races with that and
+        // can leave the status at 0 for a command that actually failed.
+        process.waitUntilExit()
+        let exitCode = process.terminationStatus
         var buf = context.channel.allocator.buffer(capacity: outputData.count)
         buf.writeBytes(outputData)
         context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buf))), promise: nil)
@@ -181,18 +210,34 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
         self.rootPath = rootPath
     }
 
-    /// Håller sökvägar innanför `rootPath` — utan detta kunde en `../`
-    /// eller absolut sökväg fly sandlådan och mutera godtyckliga filer
-    /// testprocessen har åtkomst till (CodeRabbit-fynd, PR #38). En
-    /// icke-existerande sökväg (`__blocked__`) gör att alla efterföljande
-    /// filsystemsanrop svarar "hittades inte" på ett säkert sätt, utan att
-    /// göra den här (icke-kastande) funktionen throwing.
-    private func diskPath(for sftpPath: String) -> String {
+    /// Reject traversal and symlinks. The private root prevents other users
+    /// from changing its contents between this check and filesystem access.
+    private func diskPath(for sftpPath: String, id: UInt32, context: ChannelHandlerContext) -> String? {
+        guard !sftpPath.utf8.contains(0) else {
+            sendStatus(id: id, code: .noSuchFile, context: context)
+            return nil
+        }
         let trimmed = sftpPath.hasPrefix("/") ? String(sftpPath.dropFirst()) : sftpPath
         let candidate = trimmed.isEmpty || trimmed == "." ? rootPath : rootPath + "/" + trimmed
         let standardized = (candidate as NSString).standardizingPath
         guard standardized == rootPath || standardized.hasPrefix(rootPath + "/") else {
-            return rootPath + "/__blocked_path_traversal__"
+            sendStatus(id: id, code: .noSuchFile, context: context)
+            return nil
+        }
+        var current = rootPath
+        let relative = standardized.dropFirst(rootPath.count)
+        for component in relative.split(separator: "/") {
+            current += "/" + component
+            var info = stat()
+            if lstat(current, &info) != 0 {
+                if errno == ENOENT { break }
+                sendStatus(id: id, code: .noSuchFile, context: context)
+                return nil
+            }
+            if (info.st_mode & mode_t(S_IFMT)) == mode_t(S_IFLNK) {
+                sendStatus(id: id, code: .noSuchFile, context: context)
+                return nil
+            }
         }
         return standardized
     }
@@ -286,7 +331,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .opendir:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             guard let entries = try? fm.contentsOfDirectory(atPath: disk) else {
                 sendStatus(id: id, code: .noSuchFile, message: "no such directory", context: context)
                 return
@@ -338,7 +383,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
                   let flags: UInt32 = payload.readInteger()
             else { return }
             _ = try? SFTPFileAttributes.decode(from: &payload)
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             let openFlags = SFTPOpenFlags(rawValue: flags)
             if openFlags.contains(.create) && !fm.fileExists(atPath: disk) {
                 _ = fm.createFile(atPath: disk, contents: nil)
@@ -395,7 +440,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .stat, .lstat:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             guard fm.fileExists(atPath: disk) else {
                 sendStatus(id: id, code: .noSuchFile, context: context)
                 return
@@ -408,8 +453,9 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .mkdir:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             do {
-                try fm.createDirectory(atPath: diskPath(for: path), withIntermediateDirectories: false)
+                try fm.createDirectory(atPath: disk, withIntermediateDirectories: false)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .failure, message: "\(error)", context: context)
@@ -417,8 +463,13 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .rmdir, .remove:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
+            guard disk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
-                try fm.removeItem(atPath: diskPath(for: path))
+                try fm.removeItem(atPath: disk)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .noSuchFile, message: "\(error)", context: context)
@@ -428,8 +479,14 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
             guard let id: UInt32 = payload.readInteger(), let oldPath = try? payload.readSFTPString(),
                   let newPath = try? payload.readSFTPString()
             else { return }
+            guard let oldDisk = diskPath(for: oldPath, id: id, context: context),
+                  let newDisk = diskPath(for: newPath, id: id, context: context) else { return }
+            guard oldDisk != rootPath, newDisk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
-                try fm.moveItem(atPath: diskPath(for: oldPath), toPath: diskPath(for: newPath))
+                try fm.moveItem(atPath: oldDisk, toPath: newDisk)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .failure, message: "\(error)", context: context)
@@ -437,6 +494,11 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .setstat:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
+            guard disk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
                 let attrs = try SFTPFileAttributes.decode(from: &payload)
                 var fileAttrs: [FileAttributeKey: Any] = [:]
@@ -449,7 +511,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
                 if let uid = attrs.uid { fileAttrs[.ownerAccountID] = uid }
                 if let gid = attrs.gid { fileAttrs[.groupOwnerAccountID] = gid }
                 if !fileAttrs.isEmpty {
-                    try fm.setAttributes(fileAttrs, ofItemAtPath: diskPath(for: path))
+                    try fm.setAttributes(fileAttrs, ofItemAtPath: disk)
                 }
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
@@ -574,6 +636,13 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
     // Testservern tolererar bara en bunden port åt gången — tillräckligt för
     // testerna, ingen riktig produktionsbegränsning.
     private var forwarder: ServerRemoteForwarder?
+    private let channelClose: EventLoopFuture<Void>
+    private let withheldCancel: NIOLockedValueBox<Bool>?
+
+    init(channel: Channel, withheldCancel: NIOLockedValueBox<Bool>? = nil) {
+        self.channelClose = channel.closeFuture
+        self.withheldCancel = withheldCancel
+    }
 
     func tcpForwardingRequest(
         _ request: GlobalRequest.TCPForwardingRequest,
@@ -588,6 +657,15 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
                 .map { GlobalRequest.TCPForwardingResponse(boundPort: $0) }
                 .cascade(to: promise)
         case .cancel:
+            if let withheldCancel {
+                withheldCancel.withLockedValue { $0 = true }
+                let forwarder = self.forwarder
+                channelClose.whenComplete { _ in
+                    forwarder?.stopListening()
+                    promise.fail(ChannelError.eof)
+                }
+                return
+            }
             forwarder?.stopListening()
             forwarder = nil
             promise.succeed(GlobalRequest.TCPForwardingResponse(boundPort: nil))
@@ -598,6 +676,8 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
 struct LoopbackServer {
     let group: MultiThreadedEventLoopGroup
     let channel: Channel
+    /// A fresh credential for real execution, never shared between server instances.
+    let realExecAuth: SSHAuth?
     /// Eget temp-directory per server-instans — SFTP-testerna läser/skriver
     /// riktiga filer här, aldrig i den delade systemtemp-mappen direkt.
     let sftpRoot: String
@@ -611,6 +691,7 @@ struct LoopbackServer {
     /// `nil` om `start(silenceable:)` inte bad om det. Sätt till `true` för
     /// att låta servern sluta svara utan att stänga anslutningen.
     let silent: NIOLockedValueBox<Bool>?
+    let withheldCancel: NIOLockedValueBox<Bool>?
     var port: Int { channel.localAddress?.port ?? 0 }
 
     /// `realDirectTCPIPForwarding`: `false` (default) ekar bara tillbaka
@@ -622,17 +703,28 @@ struct LoopbackServer {
     /// låta `observedWindowChanges` faktiskt samla in fönsterändringar
     /// (t.ex. `SSHShell.startKeepAlive`-tester).
     static func start(
-        password: String, realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
-        trackWindowChanges: Bool = false, silenceable: Bool = false
+        password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
+        realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
+        trackWindowChanges: Bool = false, silenceable: Bool = false,
+        withholdCancelReply: Bool = false, globalRequestDelegate: GlobalRequestDelegate? = nil,
+        directTCPIPGate: (@Sendable (Channel) -> EventLoopFuture<Void>)? = nil
     ) throws -> LoopbackServer {
+        // Real execution must not be reachable using a known test password or key.
+        precondition(!realExec || (password == nil && authorizedPublicKey == nil))
+        var template = Array((NSTemporaryDirectory() + "bastion-sftp-test-XXXXXX").utf8CString)
+        guard mkdtemp(&template) != nil else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        let sftpRoot = String(cString: template)
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let hostKey = NIOSSHPrivateKey(ed25519Key: .init())
-        let sftpRoot = NSTemporaryDirectory() + "bastion-sftp-test-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: sftpRoot, withIntermediateDirectories: true)
+        let clientKey = realExec ? Curve25519.Signing.PrivateKey() : nil
+        let allowedKey = clientKey.map { NIOSSHPrivateKey(ed25519Key: $0).publicKey } ?? authorizedPublicKey
         let observedDirectTCPIPTargets = NIOLockedValueBox<[(host: String, port: Int)]>([])
         let observedWindowChanges: NIOLockedValueBox<[(cols: Int, rows: Int)]>? =
             trackWindowChanges ? NIOLockedValueBox([]) : nil
         let silent: NIOLockedValueBox<Bool>? = silenceable ? NIOLockedValueBox(false) : nil
+        let withheldCancel: NIOLockedValueBox<Bool>? = withholdCancelReply ? NIOLockedValueBox(false) : nil
         let realForwarder = makeRealDirectTCPIPForwarder(group: group)
         let bootstrap = ServerBootstrap(group: group)
             .childChannelInitializer { channel in
@@ -640,8 +732,9 @@ struct LoopbackServer {
                     NIOSSHHandler(
                         role: .server(.init(
                             hostKeys: [hostKey],
-                            userAuthDelegate: ServerAuth(password: password),
-                            globalRequestDelegate: ServerRemoteForwardingDelegate())),
+                            userAuthDelegate: ServerAuth(password: password, authorizedPublicKey: allowedKey),
+                            globalRequestDelegate: globalRequestDelegate
+                                ?? ServerRemoteForwardingDelegate(channel: channel, withheldCancel: withheldCancel))),
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: { child, channelType in
                             switch channelType {
@@ -651,6 +744,11 @@ struct LoopbackServer {
                                 }
                                 if realDirectTCPIPForwarding {
                                     return realForwarder(child, channelType)
+                                }
+                                if let directTCPIPGate {
+                                    return directTCPIPGate(child).flatMap {
+                                        child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
+                                    }
                                 }
                                 return child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
                             default:
@@ -664,10 +762,11 @@ struct LoopbackServer {
             }
         let channel = try bootstrap.bind(host: "127.0.0.1", port: 0).wait()
         return LoopbackServer(
-            group: group, channel: channel, sftpRoot: sftpRoot,
+            group: group, channel: channel, realExecAuth: clientKey.map { .ed25519Seed($0.rawRepresentation) },
+            sftpRoot: sftpRoot,
             observedDirectTCPIPTargets: observedDirectTCPIPTargets,
             observedWindowChanges: observedWindowChanges,
-            silent: silent)
+            silent: silent, withheldCancel: withheldCancel)
     }
 
     func shutdown() {

@@ -44,6 +44,7 @@ final class PortForwardModel: ObservableObject {
     /// (jump-hosten går inte att lösa upp utan store), se `resolveConnectionPlan`.
     private let store: HostStore?
     private let connector = ChainConnector<SSHSession>()
+    private var isTornDown = false
 
     init(request: ConnectRequest, store: HostStore? = nil) {
         self.request = request
@@ -79,23 +80,26 @@ final class PortForwardModel: ObservableObject {
         defer { starting = false }
         guard let s = await ensureSession() else { return }
         do {
+            let forward: ActivePortForward
             switch kind {
             case .local:
                 let f = try await s.openLocalPortForward(bindPort: bindPort, targetHost: targetHost, targetPort: targetPort)
-                active.append(ActivePortForward(
+                forward = ActivePortForward(
                     kind: .local, bindHost: f.bindHost, actualBindPort: f.actualBindPort,
-                    targetDescription: "\(targetHost):\(targetPort)", close: { await f.close() }))
+                    targetDescription: "\(targetHost):\(targetPort)", close: { await f.close() })
             case .remote:
                 let f = try await s.openRemotePortForward(bindPort: bindPort, targetHost: targetHost, targetPort: targetPort)
-                active.append(ActivePortForward(
+                forward = ActivePortForward(
                     kind: .remote, bindHost: request.host.hostName, actualBindPort: f.actualBindPort,
-                    targetDescription: "\(targetHost):\(targetPort) (lokalt)", close: { await f.close() }))
+                    targetDescription: "\(targetHost):\(targetPort) (lokalt)", close: { await f.close() })
             case .dynamic:
                 let f = try await s.openDynamicPortForward(bindPort: bindPort)
-                active.append(ActivePortForward(
+                forward = ActivePortForward(
                     kind: .dynamic, bindHost: f.bindHost, actualBindPort: f.actualBindPort,
-                    targetDescription: "", close: { await f.close() }))
+                    targetDescription: "", close: { await f.close() })
             }
+            guard !isTornDown else { await forward.close(); return }
+            active.append(forward)
             errorMessage = nil
         } catch {
             errorMessage = "\(error)"
@@ -103,19 +107,19 @@ final class PortForwardModel: ObservableObject {
     }
 
     func stop(_ forward: ActivePortForward) async {
-        await forward.close()
+        guard active.contains(where: { $0.id == forward.id }) else { return }
         active.removeAll { $0.id == forward.id }
+        await forward.close()
     }
 
     func disconnect() {
+        isTornDown = true
         let forwards = active
         active = []
-        // Tunnlarna stängs FÖRE kedjan — de dirigerar trafik genom
-        // kedjans session, så den ska hållas vid liv tills varje tunnels
-        // egen stängning hunnit köra klart.
-        connector.disconnect(before: {
-            for f in forwards { await f.close() }
-        })
+        // Start each cleanup independently so one stalled forward cannot
+        // prevent other listeners or the SSH transport from being closed.
+        for forward in forwards { Task { await forward.close() } }
+        connector.disconnect()
     }
 }
 

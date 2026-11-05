@@ -5,7 +5,7 @@ final class S3ConnectionStoreTests: XCTestCase {
     private func makeConnection(name: String, accessKeyID: String = "AKID") -> S3Connection {
         S3Connection(
             name: name, endpoint: "https://s3.hostup.se", region: "us-east-1",
-            accessKeyID: accessKeyID, secretAccessKey: "secret")
+            accessKeyID: accessKeyID, secretAccessKey: TestCredentials.secretAccessKey)
     }
 
     func testUpsertGetDeleteSorted() {
@@ -68,6 +68,6 @@ final class S3ConnectionStoreTests: XCTestCase {
     func testCredentialsMatchStoredKeys() {
         let connection = makeConnection(name: "x", accessKeyID: "MYKEY")
         XCTAssertEqual(connection.credentials.accessKeyID, "MYKEY")
-        XCTAssertEqual(connection.credentials.secretAccessKey, "secret")
+        XCTAssertEqual(connection.credentials.secretAccessKey, TestCredentials.secretAccessKey)
     }
 }

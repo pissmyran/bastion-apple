@@ -3,12 +3,12 @@ import XCTest
 
 final class SSHCoreTests: XCTestCase {
     func testConnectAuthExecStream() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let output = try await session.run("uname -a")
         await session.close()
@@ -19,11 +19,11 @@ final class SSHCoreTests: XCTestCase {
     func testTwoSequentialCommandsOnOneConnection() async throws {
         // Docker-vyn kör flera kommandon i följd på samma anslutning (nya
         // exec-kanaler). Verifiera att multiplexering funkar.
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let first = try await session.run("one")
         let second = try await session.run("two")
@@ -33,12 +33,12 @@ final class SSHCoreTests: XCTestCase {
     }
 
     func testInteractiveShellEchoes() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 120, rows: 40)
         shell.resize(cols: 100, rows: 30)
@@ -57,12 +57,12 @@ final class SSHCoreTests: XCTestCase {
     }
 
     func testWrongPasswordFails() async throws {
-        let server = try LoopbackServer.start(password: "correct")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("wrong"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.wrongPassword), knownHosts: KnownHosts(path: nil))
 
         do {
             try await session.connect()

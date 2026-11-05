@@ -185,18 +185,49 @@ private final class ByteCollectorHandler2: ChannelInboundHandler, @unchecked Sen
 }
 
 final class DynamicPortForwardTests: XCTestCase {
+    func testCloseTerminatesActiveDynamicTunnel() async throws {
+        let server = try LoopbackServer.start(password: TestCredentials.password)
+        defer { server.shutdown() }
+        let session = SSHSession(
+            target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        let forward = try await session.openDynamicPortForward(bindPort: 0)
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let collector = ByteCollectorHandler2()
+        let client = try await ClientBootstrap(group: group)
+            .channelInitializer { $0.pipeline.addHandler(collector) }
+            .connect(host: "127.0.0.1", port: forward.actualBindPort).get()
+        var greeting = client.allocator.buffer(capacity: 3)
+        greeting.writeBytes([5, 1, 0])
+        try await client.writeAndFlush(greeting).get()
+        try await waitForBytes(collector, count: 2)
+        var request = client.allocator.buffer(capacity: 10)
+        request.writeBytes([5, 1, 0, 1, 127, 0, 0, 1, 0x27, 0x0f])
+        try await client.writeAndFlush(request).get()
+        try await waitForBytes(collector, count: 12)
+        let response = await collector.text()
+        XCTAssertGreaterThanOrEqual(response.utf8.count, 12)
+        XCTAssertTrue(client.isActive)
+        await forward.close()
+        try await client.closeFuture.get()
+        XCTAssertFalse(client.isActive)
+        await session.close()
+        try await group.shutdownGracefully()
+    }
+
     /// Regressionstest för CodeRabbit-fyndet på PR #68: CONNECT-begäran OCH
     /// applikationsdata skickas i EN och samma skrivning (simulerar att TCP
     /// råkar leverera dem hopklumpade i samma `channelRead`, oavsett vad
     /// klienten faktiskt kallade `write()` med) — utan `leftover`-vidare-
     /// befordran i `SOCKSHandshakeHandler` hade de extra bytesen tystats.
     func testPipelinedPayloadInSameWriteAsRequestIsNotDropped() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openDynamicPortForward(bindPort: 0)
@@ -243,12 +274,12 @@ final class DynamicPortForwardTests: XCTestCase {
     /// ekar, vilket `ServerDirectTCPIPEchoHandler` skulle göra oavsett mål),
     /// dels att data flödar rätt efter handskakningen.
     func testDynamicForwardRoutesDistinctTargetsAndEchoes() async throws {
-        let server = try LoopbackServer.start(password: "hunter2")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
 
         let forward = try await session.openDynamicPortForward(bindPort: 0)

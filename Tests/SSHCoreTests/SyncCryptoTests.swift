@@ -27,28 +27,28 @@ final class SyncCryptoTests: XCTestCase {
     func testSealOpenRoundTrip() throws {
         let state = sampleState()
         // Färre iterationer i testet för fart; formatet bär iterationstalet.
-        let blob = try SyncCrypto.seal(state, passphrase: "correct horse", iterations: 1000)
-        let opened = try SyncCrypto.open(blob, passphrase: "correct horse")
+        let blob = try SyncCrypto.seal(state, passphrase: TestCredentials.passphrase, iterations: 1000)
+        let opened = try SyncCrypto.open(blob, passphrase: TestCredentials.passphrase)
         XCTAssertEqual(opened.hosts.first?.alias, "web")
     }
 
     func testWrongPassphraseFails() throws {
-        let blob = try SyncCrypto.seal(sampleState(), passphrase: "rätt", iterations: 1000)
-        XCTAssertThrowsError(try SyncCrypto.open(blob, passphrase: "fel")) {
+        let blob = try SyncCrypto.seal(sampleState(), passphrase: TestCredentials.passphrase, iterations: 1000)
+        XCTAssertThrowsError(try SyncCrypto.open(blob, passphrase: TestCredentials.wrongPassphrase)) {
             XCTAssertEqual($0 as? SyncCryptoError, .wrongPassphraseOrTampered)
         }
     }
 
     func testTamperIsDetected() throws {
-        var blob = try SyncCrypto.seal(sampleState(), passphrase: "pw", iterations: 1000)
+        var blob = try SyncCrypto.seal(sampleState(), passphrase: TestCredentials.passphrase, iterations: 1000)
         blob[blob.count - 1] ^= 0xFF        // ändra sista chiffertext-byten
-        XCTAssertThrowsError(try SyncCrypto.open(blob, passphrase: "pw")) {
+        XCTAssertThrowsError(try SyncCrypto.open(blob, passphrase: TestCredentials.passphrase)) {
             XCTAssertEqual($0 as? SyncCryptoError, .wrongPassphraseOrTampered)
         }
     }
 
     func testCiphertextLeaksNoPlaintext() throws {
-        let blob = try SyncCrypto.seal(sampleState(), passphrase: "pw", iterations: 1000)
+        let blob = try SyncCrypto.seal(sampleState(), passphrase: TestCredentials.passphrase, iterations: 1000)
         let text = String(decoding: blob, as: UTF8.self)
         XCTAssertFalse(text.contains("10.0.0.5"))
         XCTAssertFalse(text.contains("deploy"))
@@ -59,7 +59,7 @@ final class SyncCryptoTests: XCTestCase {
     func testEncryptedProviderConverges() throws {
         let dir = NSTemporaryDirectory() + "bastion-enc-\(ProcessInfo.processInfo.processIdentifier)"
         defer { try? FileManager.default.removeItem(atPath: dir) }
-        let provider = EncryptedFolderSyncProvider(path: dir + "/shared.enc", passphrase: "delad-hemlis")
+        let provider = EncryptedFolderSyncProvider(path: dir + "/shared.enc", passphrase: TestCredentials.passphrase)
         let deviceA = HostStore(path: dir + "/a.json")
         let deviceB = HostStore(path: dir + "/b.json")
         // Egna, tomma snippet-databaser: testet handlar om krypteringen, och
@@ -74,7 +74,7 @@ final class SyncCryptoTests: XCTestCase {
         XCTAssertEqual(deviceB.get(h.id)?.alias, "nas")
 
         // Fel lösenfras på en tredje enhet -> kan inte läsa.
-        let wrong = EncryptedFolderSyncProvider(path: dir + "/shared.enc", passphrase: "gissning")
+        let wrong = EncryptedFolderSyncProvider(path: dir + "/shared.enc", passphrase: TestCredentials.wrongPassphrase)
         XCTAssertThrowsError(try wrong.pull())
     }
 
@@ -89,13 +89,13 @@ final class SyncCryptoTests: XCTestCase {
     /// Testet mäter TIDEN, inte bara att ett fel kastas: kontrollen måste
     /// ligga före `deriveKey`, annars är felet korrekt men skadan redan skedd.
     func testAnAbsurdIterationCountIsRejectedBeforeAnyDerivationRuns() throws {
-        var envelope = try SyncCrypto.seal(SyncState(), passphrase: "hemlig")
+        var envelope = try SyncCrypto.seal(SyncState(), passphrase: TestCredentials.passphrase)
         // Skriv över iterationsfältet med UInt32.max.
         let offset = SyncCrypto.magic.count
         envelope.replaceSubrange(offset..<(offset + 4), with: [0xFF, 0xFF, 0xFF, 0xFF])
 
         let start = ContinuousClock.now
-        XCTAssertThrowsError(try SyncCrypto.open(envelope, passphrase: "hemlig")) { error in
+        XCTAssertThrowsError(try SyncCrypto.open(envelope, passphrase: TestCredentials.passphrase)) { error in
             XCTAssertEqual(error as? SyncCryptoError, .badFormat)
         }
         XCTAssertLessThan(
@@ -108,10 +108,10 @@ final class SyncCryptoTests: XCTestCase {
     /// heller accepteras, så ingen kan göra en senare bruteforce billig genom
     /// att skriva `iterations: 1`.
     func testAnAbsurdlyWeakIterationCountIsRejected() throws {
-        var envelope = try SyncCrypto.seal(SyncState(), passphrase: "hemlig")
+        var envelope = try SyncCrypto.seal(SyncState(), passphrase: TestCredentials.passphrase)
         let offset = SyncCrypto.magic.count
         envelope.replaceSubrange(offset..<(offset + 4), with: [0, 0, 0, 1])
-        XCTAssertThrowsError(try SyncCrypto.open(envelope, passphrase: "hemlig")) { error in
+        XCTAssertThrowsError(try SyncCrypto.open(envelope, passphrase: TestCredentials.passphrase)) { error in
             XCTAssertEqual(error as? SyncCryptoError, .badFormat)
         }
     }
@@ -121,9 +121,9 @@ final class SyncCryptoTests: XCTestCase {
     func testTheDefaultAndBothBoundsAreAccepted() throws {
         for iterations in [SyncCrypto.minIterations, SyncCrypto.defaultIterations] {
             let envelope = try SyncCrypto.seal(
-                SyncState(), passphrase: "hemlig", iterations: iterations)
+                SyncState(), passphrase: TestCredentials.passphrase, iterations: iterations)
             XCTAssertNoThrow(
-                try SyncCrypto.open(envelope, passphrase: "hemlig"),
+                try SyncCrypto.open(envelope, passphrase: TestCredentials.passphrase),
                 "iterations = \(iterations) ska accepteras")
         }
     }
@@ -161,7 +161,7 @@ final class SyncCryptoTests: XCTestCase {
         // Och providern ska föra felet vidare, inte svälja det och låtsas att
         // mappen var tom — "inget att synka" och "någon la en gigabytefil
         // här" är olika saker.
-        let provider = EncryptedFolderSyncProvider(path: path, passphrase: "hemlig")
+        let provider = EncryptedFolderSyncProvider(path: path, passphrase: TestCredentials.passphrase)
         XCTAssertThrowsError(try provider.pull())
     }
 
@@ -183,7 +183,7 @@ final class SyncCryptoTests: XCTestCase {
         let dir = NSTemporaryDirectory() + "bastion-cap-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: dir) }
-        let provider = EncryptedFolderSyncProvider(path: dir + "/state.enc", passphrase: "hemlig")
+        let provider = EncryptedFolderSyncProvider(path: dir + "/state.enc", passphrase: TestCredentials.passphrase)
 
         var state = SyncState()
         state.hosts.append(Host(alias: "a", hostName: "10.0.0.1", user: "u"))

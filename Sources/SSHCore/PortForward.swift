@@ -27,6 +27,79 @@ final class DirectTCPIPWrapperHandler: ChannelDuplexHandler {
     }
 }
 
+// Admission, active sockets, and outstanding SSH opens share one shutdown gate.
+final class ForwardConnections: @unchecked Sendable {
+    private struct State {
+        var closing = false
+        var channels: [ObjectIdentifier: Channel] = [:]
+        var nextOpenID = 0
+        var opens: [Int: EventLoopFuture<Void>] = [:]
+    }
+    private let state = NIOLockedValueBox(State())
+    /// Upper bound for waiting on SSH opens that never resolve during `close`,
+    /// matching the 15 s bound of `SSHSession.waitForChildOpsToDrain()`.
+    let drainTimeout: TimeAmount
+
+    init(drainTimeout: TimeAmount = .seconds(15)) {
+        self.drainTimeout = drainTimeout
+    }
+
+    func register(_ channel: Channel) -> Bool {
+        let id = ObjectIdentifier(channel)
+        let accepted = state.withLockedValue { state in
+            guard !state.closing else { return false }
+            state.channels[id] = channel
+            return true
+        }
+        if accepted {
+            channel.closeFuture.whenComplete { _ in
+                self.state.withLockedValue { _ = $0.channels.removeValue(forKey: id) }
+            }
+        }
+        return accepted
+    }
+
+    func beginOpen(on eventLoop: EventLoop) -> EventLoopPromise<Void>? {
+        let entry: (Int, EventLoopPromise<Void>)? = state.withLockedValue { state in
+            guard !state.closing else { return nil }
+            let id = state.nextOpenID
+            state.nextOpenID += 1
+            let promise = eventLoop.makePromise(of: Void.self)
+            state.opens[id] = promise.futureResult
+            return (id, promise)
+        }
+        guard let (id, promise) = entry else { return nil }
+        promise.futureResult.whenComplete { [weak self] _ in
+            self?.state.withLockedValue { _ = $0.opens.removeValue(forKey: id) }
+        }
+        return promise
+    }
+
+    func close(serverChannel: Channel) async {
+        let snapshot = state.withLockedValue { state in
+            state.closing = true
+            return (Array(state.channels.values), Array(state.opens.values))
+        }
+        serverChannel.close(promise: nil)
+        for channel in snapshot.0 { channel.close(promise: nil) }
+        for channel in snapshot.0 { _ = try? await channel.closeFuture.get() }
+        if !snapshot.1.isEmpty {
+            // Wait for the opens to resolve, but never longer than the bound:
+            // an open that never completes must not block session cleanup.
+            let loop = serverChannel.eventLoop
+            let drained = loop.makePromise(of: Void.self)
+            EventLoopFuture.andAllComplete(snapshot.1, on: loop).cascade(to: drained)
+            let timer = loop.scheduleTask(in: drainTimeout) { drained.succeed(()) }
+            _ = try? await drained.futureResult.get()
+            timer.cancel()
+            // Abandon opens that are still unresolved so they cannot keep this
+            // instance alive through their completion callbacks.
+            state.withLockedValue { $0.opens.removeAll() }
+        }
+        _ = try? await serverChannel.closeFuture.get()
+    }
+}
+
 /// Ett aktivt lokalt portvidarebefordran (`ssh -L bindPort:targetHost:targetPort`).
 /// Håller den lokala TCP-lyssnaren vid liv — `close()` stänger den OCH alla
 /// aktiva vidarebefordrade anslutningar (CodeRabbit-fynd, PR #25: close()
@@ -35,7 +108,7 @@ final class DirectTCPIPWrapperHandler: ChannelDuplexHandler {
 /// motsatsen).
 public final class LocalPortForward {
     private let serverChannel: Channel
-    private let activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>
+    private let activeChannels: ForwardConnections
     public let bindHost: String
     public let bindPort: Int
     public let targetHost: String
@@ -46,7 +119,7 @@ public final class LocalPortForward {
     public var actualBindPort: Int { serverChannel.localAddress?.port ?? bindPort }
 
     init(
-        serverChannel: Channel, activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>,
+        serverChannel: Channel, activeChannels: ForwardConnections,
         bindHost: String, bindPort: Int, targetHost: String, targetPort: Int
     ) {
         self.serverChannel = serverChannel
@@ -58,11 +131,7 @@ public final class LocalPortForward {
     }
 
     public func close() async {
-        let channels = activeChannels.withLockedValue { $0 }
-        for (_, channel) in channels {
-            try? await channel.close().get()
-        }
-        try? await serverChannel.close().get()
+        await activeChannels.close(serverChannel: serverChannel)
     }
 }
 
@@ -91,7 +160,7 @@ extension SSHSession {
         // kunde en klient hinna ansluta mellan att bind() returnerar och
         // LocalPortForward konstrueras, och den anslutningen skulle aldrig
         // spåras/stängas av close().
-        let activeChannels = NIOLockedValueBox<[ObjectIdentifier: Channel]>([:])
+        let activeChannels = ForwardConnections()
         let serverChannel: Channel
         do {
             serverChannel = try await ServerBootstrap(group: group)
@@ -101,10 +170,9 @@ extension SSHSession {
                         return inboundChannel.eventLoop.makeFailedFuture(
                             SSHError.channelFailed("okänd avsändaradress"))
                     }
-                    let id = ObjectIdentifier(inboundChannel)
-                    activeChannels.withLockedValue { $0[id] = inboundChannel }
-                    inboundChannel.closeFuture.whenComplete { _ in
-                        activeChannels.withLockedValue { _ = $0.removeValue(forKey: id) }
+                    guard activeChannels.register(inboundChannel),
+                          let open = activeChannels.beginOpen(on: inboundChannel.eventLoop) else {
+                        return inboundChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
                     }
                     let promise = inboundChannel.eventLoop.makePromise(of: Channel.self)
                     let directTCPIP = SSHChannelType.DirectTCPIP(
@@ -116,6 +184,9 @@ extension SSHSession {
                             return inboundChannel.eventLoop.makeFailedFuture(
                                 SSHError.channelFailed("fel kanaltyp"))
                         }
+                        guard activeChannels.register(childChannel) else {
+                            return childChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
+                        }
                         return childChannel.eventLoop.makeCompletedFuture {
                             let (ours, theirs) = GlueHandler.matchedPair()
                             try childChannel.pipeline.syncOperations.addHandler(DirectTCPIPWrapperHandler())
@@ -123,6 +194,7 @@ extension SSHSession {
                             try inboundChannel.pipeline.syncOperations.addHandler(theirs)
                         }
                     }
+                    promise.futureResult.whenComplete { _ in open.succeed(()) }
                     return promise.futureResult.map { _ in }
                 }
                 .bind(host: bindHost, port: bindPort)
@@ -139,6 +211,21 @@ extension SSHSession {
     }
 }
 
+private struct RemoteForwardListenTimeout: Error {}
+
+// All mutable fields are protected by SSHSession.remoteForwards' lock.
+final class RemoteForwardReservation: @unchecked Sendable {
+    let targetHost: String
+    let targetPort: Int
+    var active = false
+    var closing = false
+
+    init(targetHost: String, targetPort: Int) {
+        self.targetHost = targetHost
+        self.targetPort = targetPort
+    }
+}
+
 /// Ett aktivt fjärr-portvidarebefordran (`ssh -R bindPort:targetHost:targetPort`):
 /// servern lyssnar åt oss, och vidarebefordrar inkommande anslutningar till oss
 /// som `forwarded-tcpip`-kanaler, som vi i sin tur bryggar mot en lokal
@@ -146,6 +233,7 @@ extension SSHSession {
 /// skillnad från `LocalPortForward` där målet ligger på fjärrsidan).
 public final class RemotePortForward {
     private weak var session: SSHSession?
+    private let reservation: RemoteForwardReservation
     public let bindHost: String
     /// Porten som begärdes (kan vara 0 = "valfri ledig port hos servern").
     public let bindPort: Int
@@ -154,8 +242,9 @@ public final class RemotePortForward {
     public let targetHost: String
     public let targetPort: Int
 
-    init(session: SSHSession, bindHost: String, bindPort: Int, actualBindPort: Int, targetHost: String, targetPort: Int) {
+    init(session: SSHSession, reservation: RemoteForwardReservation, bindHost: String, bindPort: Int, actualBindPort: Int, targetHost: String, targetPort: Int) {
         self.session = session
+        self.reservation = reservation
         self.bindHost = bindHost
         self.bindPort = bindPort
         self.actualBindPort = actualBindPort
@@ -163,23 +252,59 @@ public final class RemotePortForward {
         self.targetPort = targetPort
     }
 
-    /// Ber servern sluta vidarebefordra och tar bort routningen lokalt.
-    /// Best-effort (samma som `LocalPortForward.close()`s `try?`-mönster) —
-    /// om sessionen redan är stängd/borta finns inget att avbeställa.
+    /// Stops routing inbound channels for this forward and sends a
+    /// cancellation. Waits up to one second for the server's reply. The port
+    /// reservation is released only once the server confirms the cancellation;
+    /// otherwise it stays reserved for the rest of the session, because the
+    /// server may still be listening.
     public func close() async {
         guard let session, let channel = session.channel else { return }
-        session.remoteForwards.withLockedValue { $0.removeValue(forKey: actualBindPort) }
+        let shouldCancel = session.remoteForwards.withLockedValue { forwards in
+            guard let current = forwards[actualBindPort], current === reservation, !current.closing else { return false }
+            current.closing = true
+            current.active = false
+            return true
+        }
+        guard shouldCancel else { return }
         guard let sshHandler = try? await channel.pipeline.handler(type: NIOSSHHandler.self).get() else { return }
-        let promise = channel.eventLoop.makePromise(of: GlobalRequest.TCPForwardingResponse?.self)
         // sendTCPForwardingRequest är dokumenterat "inte trådsäker, får bara
         // anropas på kanalens egen event loop" — en async-fortsättning
         // garanterar INTE att vi fortfarande kör där, så själva anropet måste
         // skickas in explicit via eventLoop.execute (kraschade annars med
         // "Precondition failed" i assumeIsolatedUnsafeUnchecked).
+        // The port's reservation is released only once the server confirms the
+        // cancellation; without a reply it stays reserved for the rest of the
+        // session, because the server may still be listening.
+        let promise = channel.eventLoop.makePromise(of: GlobalRequest.TCPForwardingResponse?.self)
+        let remoteForwards = session.remoteForwards
+        let port = actualBindPort
+        let reservation = reservation
+        promise.futureResult.whenSuccess { _ in
+            remoteForwards.withLockedValue { forwards in
+                if forwards[port] === reservation {
+                    forwards.removeValue(forKey: port)
+                }
+            }
+        }
         channel.eventLoop.execute {
             sshHandler.sendTCPForwardingRequest(.cancel(host: self.bindHost, port: self.actualBindPort), promise: promise)
         }
-        _ = try? await promise.futureResult.get()
+        // Wait briefly for the confirmation, so the port can be reused as soon
+        // as close() returns, but never let a server that does not answer
+        // stall teardown.
+        let done = channel.eventLoop.makePromise(of: Void.self)
+        let finished = NIOLockedValueBox(false)
+        let finish: @Sendable () -> Void = {
+            let first = finished.withLockedValue { wasFinished -> Bool in
+                defer { wasFinished = true }
+                return !wasFinished
+            }
+            if first { done.succeed(()) }
+        }
+        promise.futureResult.whenComplete { _ in finish() }
+        let timer = channel.eventLoop.scheduleTask(in: .seconds(1)) { finish() }
+        _ = try? await done.futureResult.get()
+        timer.cancel()
     }
 }
 
@@ -189,6 +314,11 @@ extension SSHSession {
     /// dit ger en `forwarded-tcpip`-kanal tillbaka till oss (dirigerad via
     /// `remoteForwards`, se `handleInboundForwardedChannel`), som bryggas mot
     /// en ny lokal TCP-anslutning till `targetHost:targetPort`.
+    ///
+    /// A port can be reserved only once per session, regardless of bind host.
+    /// Port 0 can only be requested when no other ports are reserved, and
+    /// blocks other requests until the assigned port is known. An uncertain
+    /// listen or cancel result keeps its reservation for the session lifetime.
     public func openRemotePortForward(
         bindHost: String = "0.0.0.0",
         bindPort: Int,
@@ -205,39 +335,83 @@ extension SSHSession {
             throw SSHError.channelFailed(String(describing: error))
         }
 
+        guard (0...65535).contains(bindPort) else {
+            throw SSHError.channelFailed("invalid remote bind port")
+        }
+        let reservation = RemoteForwardReservation(targetHost: targetHost, targetPort: targetPort)
+        let reserved = remoteForwards.withLockedValue { forwards in
+            // Port 0 may be allocated on a different interface at a port that
+            // is already in use. While allocation is pending, no other request
+            // may start; it can only start when the table is empty.
+            guard forwards[0] == nil, forwards[bindPort] == nil,
+                  bindPort != 0 || forwards.isEmpty else { return false }
+            forwards[bindPort] = reservation
+            return true
+        }
+        guard reserved else {
+            throw SSHError.channelFailed("remote bind port is already reserved")
+        }
+
         let promise = channel.eventLoop.makePromise(of: GlobalRequest.TCPForwardingResponse?.self)
-        // Se kommentaren i RemotePortForward.close() — samma icke-trådsäkra
-        // anrop, samma behov av att explicit köra på kanalens event loop.
+        // Install the route on the SSH event loop before dispatching subsequent
+        // inbound channels, and before sending the request.
+        let result = promise.futureResult.flatMapThrowing { [remoteForwards] response in
+            let port: Int
+            if bindPort == 0 {
+                guard let assigned = response?.boundPort, (1...65535).contains(assigned) else {
+                    // The server may still be listening; retain the exclusive
+                    // reservation when its assigned port is unknown.
+                    throw SSHError.channelFailed("invalid allocated remote bind port")
+                }
+                port = assigned
+            } else {
+                port = bindPort
+            }
+            remoteForwards.withLockedValue { forwards in
+                if bindPort == 0 {
+                    forwards.removeValue(forKey: 0)
+                    forwards[port] = reservation
+                }
+                reservation.active = true
+            }
+            return port
+        }
         channel.eventLoop.execute {
             sshHandler.sendTCPForwardingRequest(.listen(host: bindHost, port: bindPort), promise: promise)
         }
-        // Registreras INUTI future-kedjan (flatMapThrowing), inte efter att
-        // await bridgat till async — en async-fortsättning kan återupptas på
-        // vilken tråd som helst, medan en inkommen forwarded-tcpip-kanal
-        // dispatchas på kanalens event loop-tråd. Utan det här fanns ett
-        // fönster där en anslutning hann in innan mappningen skrevs, och
-        // avvisades som "ingen aktiv fjärrvidarebefordran" (CodeRabbit-fynd).
-        // flatMapThrowings closure körs garanterat på future:ns egen event
-        // loop, precis som handleInboundForwardedChannel dispatchas på.
+        // A server that keeps the connection open but never answers must not
+        // hang this call, or hold the reservation, indefinitely.
+        let outcome = channel.eventLoop.makePromise(of: Int.self)
+        result.cascade(to: outcome)
+        let timer = channel.eventLoop.scheduleTask(in: remoteForwardListenTimeout) {
+            outcome.fail(RemoteForwardListenTimeout())
+        }
         let actualBindPort: Int
         do {
-            actualBindPort = try await promise.futureResult.flatMapThrowing { [remoteForwards] response in
-                // Om bindPort var 0 ("valfri ledig port") berättar servern
-                // vilken port den faktiskt band i svaret — annars är det
-                // samma som begärt.
-                let port = response?.boundPort ?? bindPort
-                remoteForwards.withLockedValue { $0[port] = (targetHost: targetHost, targetPort: targetPort) }
-                return port
-            }.get()
+            actualBindPort = try await outcome.futureResult.get()
+            timer.cancel()
         } catch {
-            // Servern kan sakna stöd för fjärr-portvidarebefordran helt
-            // (AllowTcpForwarding no), eller ha avvisat begäran — samma
-            // felkategori som andra kanalfel, inget eget behövs.
+            timer.cancel()
+            if error is RemoteForwardListenTimeout {
+                // Whether the server is listening is unknown, so the reservation
+                // stays. Closing the session is the only way to make that safe.
+                await close()
+                throw SSHError.channelFailed("remote forward listen request timed out; session closed")
+            }
+            // Only an explicit refusal proves the listener was not created.
+            // Keep the reservation for an uncertain outcome until the session ends.
+            if let error = error as? NIOSSHError, error.type == .globalRequestRefused {
+                remoteForwards.withLockedValue { forwards in
+                    if forwards[bindPort] === reservation {
+                        forwards.removeValue(forKey: bindPort)
+                    }
+                }
+            }
             throw SSHError.channelFailed(String(describing: error))
         }
 
         return RemotePortForward(
-            session: self, bindHost: bindHost, bindPort: bindPort, actualBindPort: actualBindPort,
+            session: self, reservation: reservation, bindHost: bindHost, bindPort: bindPort, actualBindPort: actualBindPort,
             targetHost: targetHost, targetPort: targetPort
         )
     }
@@ -250,7 +424,10 @@ extension SSHSession {
             return inboundChannel.eventLoop.makeFailedFuture(
                 SSHError.channelFailed("oväntad kanaltyp för inkommande fjärrvidarebefordran"))
         }
-        guard let target = remoteForwards.withLockedValue({ $0[info.listeningPort] }) else {
+        guard let target = remoteForwards.withLockedValue({ forwards -> (targetHost: String, targetPort: Int)? in
+            guard let reservation = forwards[info.listeningPort], reservation.active else { return nil }
+            return (reservation.targetHost, reservation.targetPort)
+        }) else {
             return inboundChannel.eventLoop.makeFailedFuture(
                 SSHError.channelFailed("ingen aktiv fjärrvidarebefordran för port \(info.listeningPort)"))
         }

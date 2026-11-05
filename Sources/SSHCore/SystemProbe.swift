@@ -14,7 +14,10 @@ public struct LoadAverage: Codable, Sendable, Equatable {
 public struct MemoryInfo: Codable, Sendable, Equatable {
     public var totalBytes: Int64
     public var availableBytes: Int64
-    public var usedBytes: Int64 { max(0, totalBytes - availableBytes) }
+    public var usedBytes: Int64 {
+        let (used, overflow) = totalBytes.subtractingReportingOverflow(availableBytes)
+        return overflow ? (totalBytes >= 0 ? .max : 0) : max(0, used)
+    }
     public var usedFraction: Double { totalBytes > 0 ? Double(usedBytes) / Double(totalBytes) : 0 }
 }
 
@@ -92,6 +95,11 @@ public enum SystemProbe {
         snap.load = parseLoad(sections["LOADAVG"]?.first)
         snap.uptimeSeconds = sections["UPTIME"]?.first?
             .split(separator: " ").first.flatMap { Double($0) }
+            .flatMap { seconds in
+                guard seconds.isFinite, seconds >= 0,
+                      Int(exactly: seconds.rounded(.towardZero)) != nil else { return nil }
+                return seconds
+            }
         snap.memory = parseMemory(sections["MEM"] ?? [])
         snap.disks = parseDisks(sections["DF"] ?? [])
         snap.os = parseOS(sections["OS"] ?? [])
@@ -116,8 +124,11 @@ public enum SystemProbe {
             let key = f[0].hasSuffix(":") ? String(f[0].dropLast()) : String(f[0])
             if let v = Int64(f[1]) { kb[key] = v }
         }
-        guard let total = kb["MemTotal"], let avail = kb["MemAvailable"] else { return nil }
-        return MemoryInfo(totalBytes: total * 1024, availableBytes: avail * 1024)
+        guard let total = kb["MemTotal"], let avail = kb["MemAvailable"],
+              total >= 0, avail >= 0, avail <= total,
+              let totalBytes = bytes(fromKilobytes: total),
+              let availableBytes = bytes(fromKilobytes: avail) else { return nil }
+        return MemoryInfo(totalBytes: totalBytes, availableBytes: availableBytes)
     }
 
     private static func parseDisks(_ lines: [String]) -> [DiskUsage] {
@@ -125,14 +136,23 @@ public enum SystemProbe {
         for line in lines {
             let f = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
             guard f.count >= 6, f[0] != "Filesystem" else { continue }
-            guard let blocks = Int64(f[1]), let used = Int64(f[2]), let avail = Int64(f[3]) else { continue }
+            guard let blocks = Int64(f[1]), let used = Int64(f[2]), let avail = Int64(f[3]),
+                  blocks >= 0, used >= 0, avail >= 0, used <= blocks,
+                  let sizeBytes = bytes(fromKilobytes: blocks),
+                  let usedBytes = bytes(fromKilobytes: used),
+                  let availableBytes = bytes(fromKilobytes: avail) else { continue }
             let cap = Int(f[4].replacingOccurrences(of: "%", with: "")) ?? 0
             out.append(DiskUsage(
                 filesystem: f[0], mount: f[5...].joined(separator: " "),
-                sizeBytes: blocks * 1024, usedBytes: used * 1024,
-                availableBytes: avail * 1024, capacityPercent: cap))
+                sizeBytes: sizeBytes, usedBytes: usedBytes,
+                availableBytes: availableBytes, capacityPercent: cap))
         }
         return out
+    }
+
+    private static func bytes(fromKilobytes value: Int64) -> Int64? {
+        let (bytes, overflow) = value.multipliedReportingOverflow(by: 1024)
+        return overflow ? nil : bytes
     }
 
     private static func parseOS(_ lines: [String]) -> String? {

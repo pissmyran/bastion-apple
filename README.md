@@ -24,6 +24,12 @@ Build and test the Swift package (works on Linux and macOS):
 swift build && swift test
 ```
 
+Test the tvOS OAuth token store outside Xcode (Linux only):
+
+```bash
+bash Tests/TVAppTests/run-token-store-tests.sh
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
@@ -42,6 +48,7 @@ cross-platform documentation and sync compatibility reviews. See
 
 ## More
 
+- [Behavior rules](docs/architecture.md): SSH config import, port forwarding, the external binary cache, system metrics and OAuth refresh
 - [The documentation](https://myrpisset.github.io/bastion-apple/): getting started, architecture, operations, sync format and releases
 - [SECURITY.md](SECURITY.md): report a vulnerability
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribute

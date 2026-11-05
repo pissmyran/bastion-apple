@@ -3,14 +3,14 @@ import XCTest
 
 final class OAuthTokenTests: XCTestCase {
     func testNotExpiredJustAfterIssue() {
-        let response = OAuthTokenResponse(accessToken: "a", refreshToken: "r", expiresIn: 3600)
+        let response = OAuthTokenResponse(accessToken: TestCredentials.accessToken, refreshToken: TestCredentials.refreshToken, expiresIn: 3600)
         let now = Date()
         let token = StoredOAuthToken(response: response, now: now)
         XCTAssertFalse(token.isExpired)
     }
 
     func testExpiredPastExpiryMinusMargin() {
-        let response = OAuthTokenResponse(accessToken: "a", refreshToken: "r", expiresIn: 3600)
+        let response = OAuthTokenResponse(accessToken: TestCredentials.accessToken, refreshToken: TestCredentials.refreshToken, expiresIn: 3600)
         let issuedAt = Date(timeIntervalSince1970: 0)
         let token = StoredOAuthToken(response: response, now: issuedAt)
         // expiresAt = issuedAt + 3600 - 60 = issuedAt + 3540
@@ -21,7 +21,7 @@ final class OAuthTokenTests: XCTestCase {
     }
 
     func testNoExpiresInNeverExpires() {
-        let response = OAuthTokenResponse(accessToken: "a", refreshToken: "r", expiresIn: nil)
+        let response = OAuthTokenResponse(accessToken: TestCredentials.accessToken, refreshToken: TestCredentials.refreshToken, expiresIn: nil)
         let token = StoredOAuthToken(response: response)
         XCTAssertNil(token.expiresAt)
         XCTAssertFalse(token.isExpired)
@@ -30,20 +30,20 @@ final class OAuthTokenTests: XCTestCase {
     func testRefreshTokenCarriesOverWhenProviderOmitsIt() {
         // De flesta refresh_token-svar innehåller ingen ny refresh_token —
         // den gamla måste bevaras, annars tappar vi förmågan att förnya igen.
-        let response = OAuthTokenResponse(accessToken: "new-access", refreshToken: nil, expiresIn: 3600)
-        let token = StoredOAuthToken(response: response, previousRefreshToken: "old-refresh")
-        XCTAssertEqual(token.refreshToken, "old-refresh")
-        XCTAssertEqual(token.accessToken, "new-access")
+        let response = OAuthTokenResponse(accessToken: TestCredentials.newAccessToken, refreshToken: nil, expiresIn: 3600)
+        let token = StoredOAuthToken(response: response, previousRefreshToken: TestCredentials.oldRefreshToken)
+        XCTAssertEqual(token.refreshToken, TestCredentials.oldRefreshToken)
+        XCTAssertEqual(token.accessToken, TestCredentials.newAccessToken)
     }
 
     func testRefreshTokenReplacedWhenProviderRotatesIt() {
-        let response = OAuthTokenResponse(accessToken: "new-access", refreshToken: "rotated-refresh", expiresIn: 3600)
-        let token = StoredOAuthToken(response: response, previousRefreshToken: "old-refresh")
-        XCTAssertEqual(token.refreshToken, "rotated-refresh")
+        let response = OAuthTokenResponse(accessToken: TestCredentials.newAccessToken, refreshToken: TestCredentials.rotatedRefreshToken, expiresIn: 3600)
+        let token = StoredOAuthToken(response: response, previousRefreshToken: TestCredentials.oldRefreshToken)
+        XCTAssertEqual(token.refreshToken, TestCredentials.rotatedRefreshToken)
     }
 
     func testCodableRoundTrip() throws {
-        let response = OAuthTokenResponse(accessToken: "a", refreshToken: "r", expiresIn: 3600)
+        let response = OAuthTokenResponse(accessToken: TestCredentials.accessToken, refreshToken: TestCredentials.refreshToken, expiresIn: 3600)
         let token = StoredOAuthToken(response: response)
         let data = try JSONEncoder().encode(token)
         let decoded = try JSONDecoder().decode(StoredOAuthToken.self, from: data)

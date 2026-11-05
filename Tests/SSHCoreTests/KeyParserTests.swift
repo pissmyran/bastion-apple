@@ -1,4 +1,5 @@
 import XCTest
+import NIOSSH
 @testable import SSHCore
 
 final class KeyParserTests: XCTestCase {
@@ -18,10 +19,9 @@ final class KeyParserTests: XCTestCase {
     // Bevisar hela vägen: parsa nyckel -> signera handshake -> servern accepterar.
     // Fel parsning ger ogiltig signatur och auth misslyckas.
     func testParsedKeyAuthenticatesEndToEnd() async throws {
-        let server = try LoopbackServer.start(password: "irrelevant")
-        defer { server.shutdown() }
-
         let pair = KeyGenerator.generateEd25519(comment: "authentication-test")
+        let server = try LoopbackServer.start(authorizedPublicKey: NIOSSHPublicKey(openSSHPublicKey: pair.publicKeyLine))
+        defer { server.shutdown() }
         let pem = try OpenSSHPrivateKey.export(seed: pair.seed, comment: "authentication-test")
         let auth = try OpenSSHPrivateKey.parse(pem)
         let session = SSHSession(
@@ -40,7 +40,7 @@ final class KeyParserTests: XCTestCase {
     /// `ssh-keygen` (inte ett handskrivet fixture) — bevisar att vår parser
     /// läser EXAKT samma filformat som den riktiga referensimplementationen
     /// skriver, inte bara vår egen `export()` (som bara finns för Ed25519).
-    private func generateRealECDSAKey(bits: Int) throws -> String {
+    private func generateRealECDSAKey(bits: Int) throws -> (pem: String, publicKey: NIOSSHPublicKey) {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("bastion-ecdsa-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -61,11 +61,14 @@ final class KeyParserTests: XCTestCase {
         guard process.terminationStatus == 0 else {
             throw XCTSkip("ssh-keygen inte tillgänglig eller misslyckades (bits=\(bits))")
         }
-        return try String(contentsOfFile: keyPath, encoding: .utf8)
+        let pem = try String(contentsOfFile: keyPath, encoding: .utf8)
+        let publicKeyLine = try String(contentsOfFile: keyPath + ".pub", encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (pem, try NIOSSHPublicKey(openSSHPublicKey: publicKeyLine))
     }
 
     func testParseECDSAP256() throws {
-        let pem = try generateRealECDSAKey(bits: 256)
+        let pem = try generateRealECDSAKey(bits: 256).pem
         guard case .ecdsa(let curve, let scalar) = try OpenSSHPrivateKey.parse(pem) else {
             return XCTFail("förväntade ECDSA-nyckel")
         }
@@ -74,7 +77,7 @@ final class KeyParserTests: XCTestCase {
     }
 
     func testParseECDSAP384() throws {
-        let pem = try generateRealECDSAKey(bits: 384)
+        let pem = try generateRealECDSAKey(bits: 384).pem
         guard case .ecdsa(let curve, let scalar) = try OpenSSHPrivateKey.parse(pem) else {
             return XCTFail("förväntade ECDSA-nyckel")
         }
@@ -83,7 +86,7 @@ final class KeyParserTests: XCTestCase {
     }
 
     func testParseECDSAP521() throws {
-        let pem = try generateRealECDSAKey(bits: 521)
+        let pem = try generateRealECDSAKey(bits: 521).pem
         guard case .ecdsa(let curve, let scalar) = try OpenSSHPrivateKey.parse(pem) else {
             return XCTFail("förväntade ECDSA-nyckel")
         }
@@ -97,10 +100,10 @@ final class KeyParserTests: XCTestCase {
     // NIOSSHPrivateKey-wiring är korrekt, inte bara att parsern inte kastar.
     func testECDSAKeyAuthenticatesEndToEnd() async throws {
         for bits in [256, 384, 521] {
-            let pem = try generateRealECDSAKey(bits: bits)
-            let auth = try OpenSSHPrivateKey.parse(pem)
+            let key = try generateRealECDSAKey(bits: bits)
+            let auth = try OpenSSHPrivateKey.parse(key.pem)
 
-            let server = try LoopbackServer.start(password: "irrelevant")
+            let server = try LoopbackServer.start(authorizedPublicKey: key.publicKey)
             defer { server.shutdown() }
             let session = SSHSession(
                 target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),

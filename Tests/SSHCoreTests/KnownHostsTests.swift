@@ -31,17 +31,17 @@ final class KnownHostsTests: XCTestCase {
 
     // Positiv väg: okänd värd lärs in, återanslutning litar på samma nyckel.
     func testLearnThenTrustEndToEnd() async throws {
-        let server = try LoopbackServer.start(password: "pw")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let store = KnownHosts(path: nil)
         let target = SSHTarget(host: "127.0.0.1", port: server.port, username: "t")
 
-        let s1 = SSHSession(target: target, auth: .password("pw"), knownHosts: store)
+        let s1 = SSHSession(target: target, auth: .password(TestCredentials.password), knownHosts: store)
         try await s1.connect()
         _ = try await s1.run("echo hej")
         await s1.close()
 
-        let s2 = SSHSession(target: target, auth: .password("pw"), knownHosts: store)
+        let s2 = SSHSession(target: target, auth: .password(TestCredentials.password), knownHosts: store)
         try await s2.connect()
         let out = try await s2.run("echo igen")
         await s2.close()
@@ -50,7 +50,7 @@ final class KnownHostsTests: XCTestCase {
 
     // MITM-väg: lagrad nyckel skiljer sig från serverns -> anslutning avvisas.
     func testChangedHostKeyRejected() async throws {
-        let server = try LoopbackServer.start(password: "pw")
+        let server = try LoopbackServer.start(password: TestCredentials.password)
         defer { server.shutdown() }
         let store = KnownHosts(path: nil)
         // Förgifta lagringen med en annan nyckel för exakt denna host:port.
@@ -59,7 +59,7 @@ final class KnownHostsTests: XCTestCase {
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "t"),
-            auth: .password("pw"), knownHosts: store)
+            auth: .password(TestCredentials.password), knownHosts: store)
         do {
             try await session.connect()
             _ = try await session.run("id")

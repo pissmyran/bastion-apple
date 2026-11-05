@@ -27,12 +27,12 @@ final class SSHShellKeepAliveTests: XCTestCase {
     }
 
     func testStartKeepAliveSendsPeriodicWindowChangeRequests() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", trackWindowChanges: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, trackWindowChanges: true)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 
@@ -51,12 +51,12 @@ final class SSHShellKeepAliveTests: XCTestCase {
     }
 
     func testStopKeepAliveActuallyStopsSending() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", trackWindowChanges: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, trackWindowChanges: true)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 
@@ -90,12 +90,12 @@ final class SSHShellKeepAliveTests: XCTestCase {
     }
 
     func testResizeUpdatesSizeUsedByKeepAlive() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", trackWindowChanges: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, trackWindowChanges: true)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 
@@ -124,12 +124,12 @@ final class SSHShellKeepAliveTests: XCTestCase {
     /// INTE utlösa återanropet. Utan den kunde det här testet inte skilja
     /// "sonden märkte tystnaden" från "återanropet utlöses alltid".
     func testKeepAliveReportsAPeerThatStopsAnswering() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", silenceable: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, silenceable: true)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 
@@ -161,12 +161,12 @@ final class SSHShellKeepAliveTests: XCTestCase {
     /// rapporteras, hur många intervall som än passerar. Ett återanrop som
     /// utlöses här skulle stänga fungerande sessioner mitt i arbetet.
     func testKeepAliveStaysQuietWhileThePeerKeepsAnswering() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", silenceable: true)
+        let server = try LoopbackServer.start(password: TestCredentials.password, silenceable: true)
         defer { server.shutdown() }
 
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: .password(TestCredentials.password), knownHosts: KnownHosts(path: nil))
         try await session.connect()
         let shell = try await session.openShell(cols: 80, rows: 24)
 

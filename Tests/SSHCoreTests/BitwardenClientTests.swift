@@ -15,11 +15,12 @@ final class BitwardenClientTests: XCTestCase {
     }
 
     func testFetchPasswordStripsTrailingNewline() async throws {
-        let script = try makeScript("#!/bin/sh\nprintf 'hunter2\\n'\n")
+        let secret = "pw-" + UUID().uuidString
+        let script = try makeScript("#!/bin/sh\nprintf '\(secret)\\n'\n")
         let password = try await withTimeout(seconds: 10) {
             try BitwardenClient.fetchPassword(itemID: "irrelevant", session: nil, executableURL: script, binaryName: "")
         }
-        XCTAssertEqual(password, "hunter2")
+        XCTAssertEqual(password, secret)
     }
 
     /// Ledande/inre whitespace i ett RIKTIGT lösenord får INTE trimmas bort —

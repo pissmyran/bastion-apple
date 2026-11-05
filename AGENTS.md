@@ -52,6 +52,12 @@ Test the CLI password prompt (after `swift build`; needs Python 3 and a POSIX te
 python3 Tests/cli_password_prompt_test.py
 ```
 
+Test the tvOS OAuth token store outside Xcode (Linux only; compiles `App/TVApp/TVOAuthTokenStore.swift` with an in-memory Keychain):
+
+```bash
+bash Tests/TVAppTests/run-token-store-tests.sh
+```
+
 Generate the Xcode project (macOS only):
 
 ```bash
@@ -67,6 +73,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
 - **Releases:** the pull request title decides the version; see `docs/release.md`.
+- **Behavior rules** for SSH config import, port forwarding (reservations, timeouts, teardown), the external binary cache, system metrics and OAuth refresh are in [docs/architecture.md](docs/architecture.md). Change the code and that page in the same pull request.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
 ## CodeRabbit configuration
