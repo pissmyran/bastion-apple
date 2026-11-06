@@ -27,6 +27,60 @@ final class DirectTCPIPWrapperHandler: ChannelDuplexHandler {
     }
 }
 
+// Admission, active sockets, and outstanding SSH opens share one shutdown gate.
+final class ForwardConnections: @unchecked Sendable {
+    private struct State {
+        var closing = false
+        var channels: [ObjectIdentifier: Channel] = [:]
+        var nextOpenID = 0
+        var opens: [Int: EventLoopFuture<Void>] = [:]
+    }
+    private let state = NIOLockedValueBox(State())
+
+    func register(_ channel: Channel) -> Bool {
+        let id = ObjectIdentifier(channel)
+        let accepted = state.withLockedValue { state in
+            guard !state.closing else { return false }
+            state.channels[id] = channel
+            return true
+        }
+        if accepted {
+            channel.closeFuture.whenComplete { _ in
+                self.state.withLockedValue { _ = $0.channels.removeValue(forKey: id) }
+            }
+        }
+        return accepted
+    }
+
+    func beginOpen(on eventLoop: EventLoop) -> EventLoopPromise<Void>? {
+        let entry: (Int, EventLoopPromise<Void>)? = state.withLockedValue { state in
+            guard !state.closing else { return nil }
+            let id = state.nextOpenID
+            state.nextOpenID += 1
+            let promise = eventLoop.makePromise(of: Void.self)
+            state.opens[id] = promise.futureResult
+            return (id, promise)
+        }
+        guard let (id, promise) = entry else { return nil }
+        promise.futureResult.whenComplete { _ in
+            self.state.withLockedValue { _ = $0.opens.removeValue(forKey: id) }
+        }
+        return promise
+    }
+
+    func close(serverChannel: Channel) async {
+        let snapshot = state.withLockedValue { state in
+            state.closing = true
+            return (Array(state.channels.values), Array(state.opens.values))
+        }
+        serverChannel.close(promise: nil)
+        for channel in snapshot.0 { channel.close(promise: nil) }
+        for channel in snapshot.0 { _ = try? await channel.closeFuture.get() }
+        for open in snapshot.1 { _ = try? await open.get() }
+        _ = try? await serverChannel.closeFuture.get()
+    }
+}
+
 /// Ett aktivt lokalt portvidarebefordran (`ssh -L bindPort:targetHost:targetPort`).
 /// Håller den lokala TCP-lyssnaren vid liv — `close()` stänger den OCH alla
 /// aktiva vidarebefordrade anslutningar (CodeRabbit-fynd, PR #25: close()
@@ -35,7 +89,7 @@ final class DirectTCPIPWrapperHandler: ChannelDuplexHandler {
 /// motsatsen).
 public final class LocalPortForward {
     private let serverChannel: Channel
-    private let activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>
+    private let activeChannels: ForwardConnections
     public let bindHost: String
     public let bindPort: Int
     public let targetHost: String
@@ -46,7 +100,7 @@ public final class LocalPortForward {
     public var actualBindPort: Int { serverChannel.localAddress?.port ?? bindPort }
 
     init(
-        serverChannel: Channel, activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>,
+        serverChannel: Channel, activeChannels: ForwardConnections,
         bindHost: String, bindPort: Int, targetHost: String, targetPort: Int
     ) {
         self.serverChannel = serverChannel
@@ -58,11 +112,7 @@ public final class LocalPortForward {
     }
 
     public func close() async {
-        let channels = activeChannels.withLockedValue { $0 }
-        for (_, channel) in channels {
-            try? await channel.close().get()
-        }
-        try? await serverChannel.close().get()
+        await activeChannels.close(serverChannel: serverChannel)
     }
 }
 
@@ -91,7 +141,7 @@ extension SSHSession {
         // kunde en klient hinna ansluta mellan att bind() returnerar och
         // LocalPortForward konstrueras, och den anslutningen skulle aldrig
         // spåras/stängas av close().
-        let activeChannels = NIOLockedValueBox<[ObjectIdentifier: Channel]>([:])
+        let activeChannels = ForwardConnections()
         let serverChannel: Channel
         do {
             serverChannel = try await ServerBootstrap(group: group)
@@ -101,10 +151,9 @@ extension SSHSession {
                         return inboundChannel.eventLoop.makeFailedFuture(
                             SSHError.channelFailed("okänd avsändaradress"))
                     }
-                    let id = ObjectIdentifier(inboundChannel)
-                    activeChannels.withLockedValue { $0[id] = inboundChannel }
-                    inboundChannel.closeFuture.whenComplete { _ in
-                        activeChannels.withLockedValue { _ = $0.removeValue(forKey: id) }
+                    guard activeChannels.register(inboundChannel),
+                          let open = activeChannels.beginOpen(on: inboundChannel.eventLoop) else {
+                        return inboundChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
                     }
                     let promise = inboundChannel.eventLoop.makePromise(of: Channel.self)
                     let directTCPIP = SSHChannelType.DirectTCPIP(
@@ -116,6 +165,9 @@ extension SSHSession {
                             return inboundChannel.eventLoop.makeFailedFuture(
                                 SSHError.channelFailed("fel kanaltyp"))
                         }
+                        guard activeChannels.register(childChannel) else {
+                            return childChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
+                        }
                         return childChannel.eventLoop.makeCompletedFuture {
                             let (ours, theirs) = GlueHandler.matchedPair()
                             try childChannel.pipeline.syncOperations.addHandler(DirectTCPIPWrapperHandler())
@@ -123,6 +175,7 @@ extension SSHSession {
                             try inboundChannel.pipeline.syncOperations.addHandler(theirs)
                         }
                     }
+                    promise.futureResult.whenComplete { _ in open.succeed(()) }
                     return promise.futureResult.map { _ in }
                 }
                 .bind(host: bindHost, port: bindPort)

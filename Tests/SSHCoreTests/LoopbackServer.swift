@@ -687,7 +687,8 @@ struct LoopbackServer {
         password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
         realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
         trackWindowChanges: Bool = false, silenceable: Bool = false,
-        withholdCancelReply: Bool = false, globalRequestDelegate: GlobalRequestDelegate? = nil
+        withholdCancelReply: Bool = false, globalRequestDelegate: GlobalRequestDelegate? = nil,
+        directTCPIPGate: (@Sendable (Channel) -> EventLoopFuture<Void>)? = nil
     ) throws -> LoopbackServer {
         // Real execution must not be reachable using a known test password or key.
         precondition(!realExec || (password == nil && authorizedPublicKey == nil))
@@ -724,6 +725,11 @@ struct LoopbackServer {
                                 }
                                 if realDirectTCPIPForwarding {
                                     return realForwarder(child, channelType)
+                                }
+                                if let directTCPIPGate {
+                                    return directTCPIPGate(child).flatMap {
+                                        child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
+                                    }
                                 }
                                 return child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
                             default:
