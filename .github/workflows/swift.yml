@@ -6,8 +6,14 @@ name: Swift
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "**/*.swift"
+      - "Tests/fixtures/**"
   pull_request:
     branches: [ "main" ]
+    paths:
+      - "**/*.swift"
+      - "Tests/fixtures/**"
 
 jobs:
   build:
