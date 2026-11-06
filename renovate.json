@@ -1,4 +1,57 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>Pissmyran/.github:renovate-config"]
+  "extends": [
+    "config:best-practices",
+    "schedule:automergeDaily",
+    ":dependencyDashboard"
+  ],
+  "ignorePresets": [":pinDevDependencies"],
+  "timezone": "Europe/Stockholm",
+  "schedule": ["at any time"],
+  "rangeStrategy": "bump",
+  "labels": ["dependencies"],
+  "assignees": ["pissmyran"],
+  "assignAutomerge": true,
+  "automerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "rebaseWhen": "conflicted",
+  "prHourlyLimit": 0,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-6 * * 1"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "automerge": true,
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Allt utom nya huvudversioner samlas i en PR per repo.",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "minor, patch och digest",
+      "groupSlug": "non-major"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Verktyg som körs med en låst version via npx i Dockerfiler, skript och workflows, t.ex. npx --yes @puppeteer/browsers@3.2.5.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/",
+        "/\\.sh$/",
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "npx --yes (?<depName>@?[a-z0-9][a-z0-9._/-]*)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "npm"
+    }
+  ],
+  "semanticCommits": "enabled",
+  "platformCommit": true
 }
