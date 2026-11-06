@@ -6,7 +6,7 @@ Bastion for Apple is an SSH client for iOS, iPadOS, macOS and tvOS. A shared Swi
 
 - Swift, SwiftNIO SSH and swift-crypto for the core; SwiftUI and SwiftTerm for the apps.
 - XcodeGen (via `App/generate-project.sh`) and fastlane for the app projects.
-- Zensical for the documentation site; Node.js and Python only for the small test scripts in `Tests/`.
+- Zensical for the documentation site; Node.js and Python for the small test scripts in `Tests/`. ZIP extraction also needs Python 3 with POSIX `dir_fd` and `O_NOFOLLOW` support on the remote host.
 
 ## Commands
 
@@ -24,7 +24,7 @@ All working commands are listed in `AGENTS.md`. Beyond those:
 
 ## Release
 
-Merging to `main` creates a SemVer tag and GitHub Release automatically from the PR title (Conventional Commits). Documentation is published from the tag to GitHub Pages. A release does not publish to any app store; distribution is a separate step. Details: `docs/release.md`.
+Merging to `main` creates a SemVer tag and GitHub Release only when the commits since the previous release (judged by PR title, Conventional Commits) require a version bump; a `docs:` merge alone does not release or publish documentation. Documentation is published from the tag to GitHub Pages. A release does not publish to any app store; distribution is a separate step. Details: `docs/release.md`.
 
 ## Repo-specific rules
 
