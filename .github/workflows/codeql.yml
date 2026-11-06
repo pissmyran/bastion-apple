@@ -3,23 +3,28 @@ name: CodeQL
 # Advanced setup replacing GitHub's default setup (disable the default setup in
 # Settings > Code security, the two cannot run together). It keeps the same
 # languages but does not run for documentation-only changes, and on pull
-# requests it runs the macOS Swift analysis only when Swift files change.
-# Pushes to main always run every language, so the "Analyze (swift)" check
-# required by release.yml exists for every release commit.
+# requests each language runs only when files of that language change (the
+# macOS Swift analysis included). Pushes to main always run every language, so
+# the "Analyze (swift)" check required by release.yml exists for every release
+# commit.
 
 on:
   push:
     branches: [ "main" ]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "zensical.toml"
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!zensical.toml"
+      - "docs/prototype/**"
   pull_request:
     branches: [ "main" ]
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "zensical.toml"
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!zensical.toml"
+      - "docs/prototype/**"
   schedule:
     - cron: "17 4 * * 1"
 
@@ -32,9 +37,11 @@ permissions:
 
 jobs:
   changes:
-    name: Detect Swift changes
+    name: Detect changed languages
     runs-on: ubuntu-latest
     outputs:
+      matrix: ${{ steps.diff.outputs.matrix }}
+      has_matrix: ${{ steps.diff.outputs.has_matrix }}
       swift: ${{ steps.diff.outputs.swift }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,10 +54,35 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          if [ "${EVENT}" != "pull_request" ]; then
-            echo "swift=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "${BASE_SHA}...${HEAD_SHA}" \
-            | grep -Eq '^(Sources/|Tests/|App/|Package\.swift|Package\.resolved)|\.swift$'; then
+          if [ "${EVENT}" = "pull_request" ]; then
+            files="$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")"
+          else
+            files=""
+          fi
+
+          matches() {
+            # Everything runs outside pull requests, and when this workflow changes.
+            [ "${EVENT}" != "pull_request" ] && return 0
+            grep -Eq '^\.github/workflows/codeql\.yml$' <<< "${files}" && return 0
+            grep -Eq "$1" <<< "${files}"
+          }
+
+          languages=()
+          matches '^\.github/(workflows|actions)/' && languages+=(actions)
+          matches '\.(js|jsx|mjs|cjs|ts|tsx|html)$|(^|/)package(-lock)?\.json$' && languages+=(javascript-typescript)
+          matches '\.py$' && languages+=(python)
+          matches '\.(rb|gemspec)$|(^|/)(Gemfile|Gemfile\.lock|Rakefile|Fastfile|Appfile|Matchfile|Pluginfile)$' && languages+=(ruby)
+
+          if [ "${#languages[@]}" -gt 0 ]; then
+            matrix="$(printf '%s\n' "${languages[@]}" | jq -R . | jq -sc '{include: map({language: .})}')"
+            echo "has_matrix=true" >> "$GITHUB_OUTPUT"
+          else
+            matrix='{"include":[]}'
+            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+          if matches '^(Sources/|App/|Tests/SSHCoreTests/|Tests/fixtures/|Package\.swift$|Package\.resolved$)|\.swift$'; then
             echo "swift=true" >> "$GITHUB_OUTPUT"
           else
             echo "swift=false" >> "$GITHUB_OUTPUT"
@@ -58,6 +90,8 @@ jobs:
 
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.has_matrix == 'true'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -65,8 +99,7 @@ jobs:
       security-events: write
     strategy:
       fail-fast: false
-      matrix:
-        language: [ actions, javascript-typescript, python, ruby ]
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
