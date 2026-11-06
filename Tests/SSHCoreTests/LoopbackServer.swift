@@ -4,6 +4,11 @@ import NIOCore
 import NIOPosix
 import NIOSSH
 import NIOConcurrencyHelpers
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 @testable import SSHCore
 
 // En minimal SSH-server i processen, enbart för test. Accepterar ett lösenord
@@ -186,18 +191,34 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
         self.rootPath = rootPath
     }
 
-    /// Håller sökvägar innanför `rootPath` — utan detta kunde en `../`
-    /// eller absolut sökväg fly sandlådan och mutera godtyckliga filer
-    /// testprocessen har åtkomst till (CodeRabbit-fynd, PR #38). En
-    /// icke-existerande sökväg (`__blocked__`) gör att alla efterföljande
-    /// filsystemsanrop svarar "hittades inte" på ett säkert sätt, utan att
-    /// göra den här (icke-kastande) funktionen throwing.
-    private func diskPath(for sftpPath: String) -> String {
+    /// Reject traversal and symlinks. The private root prevents other users
+    /// from changing its contents between this check and filesystem access.
+    private func diskPath(for sftpPath: String, id: UInt32, context: ChannelHandlerContext) -> String? {
+        guard !sftpPath.utf8.contains(0) else {
+            sendStatus(id: id, code: .noSuchFile, context: context)
+            return nil
+        }
         let trimmed = sftpPath.hasPrefix("/") ? String(sftpPath.dropFirst()) : sftpPath
         let candidate = trimmed.isEmpty || trimmed == "." ? rootPath : rootPath + "/" + trimmed
         let standardized = (candidate as NSString).standardizingPath
         guard standardized == rootPath || standardized.hasPrefix(rootPath + "/") else {
-            return rootPath + "/__blocked_path_traversal__"
+            sendStatus(id: id, code: .noSuchFile, context: context)
+            return nil
+        }
+        var current = rootPath
+        let relative = standardized.dropFirst(rootPath.count)
+        for component in relative.split(separator: "/") {
+            current += "/" + component
+            var info = stat()
+            if lstat(current, &info) != 0 {
+                if errno == ENOENT { break }
+                sendStatus(id: id, code: .noSuchFile, context: context)
+                return nil
+            }
+            if (info.st_mode & mode_t(S_IFMT)) == mode_t(S_IFLNK) {
+                sendStatus(id: id, code: .noSuchFile, context: context)
+                return nil
+            }
         }
         return standardized
     }
@@ -291,7 +312,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .opendir:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             guard let entries = try? fm.contentsOfDirectory(atPath: disk) else {
                 sendStatus(id: id, code: .noSuchFile, message: "no such directory", context: context)
                 return
@@ -343,7 +364,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
                   let flags: UInt32 = payload.readInteger()
             else { return }
             _ = try? SFTPFileAttributes.decode(from: &payload)
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             let openFlags = SFTPOpenFlags(rawValue: flags)
             if openFlags.contains(.create) && !fm.fileExists(atPath: disk) {
                 _ = fm.createFile(atPath: disk, contents: nil)
@@ -400,7 +421,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .stat, .lstat:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
-            let disk = diskPath(for: path)
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             guard fm.fileExists(atPath: disk) else {
                 sendStatus(id: id, code: .noSuchFile, context: context)
                 return
@@ -413,8 +434,9 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .mkdir:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
             do {
-                try fm.createDirectory(atPath: diskPath(for: path), withIntermediateDirectories: false)
+                try fm.createDirectory(atPath: disk, withIntermediateDirectories: false)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .failure, message: "\(error)", context: context)
@@ -422,8 +444,13 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .rmdir, .remove:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
+            guard disk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
-                try fm.removeItem(atPath: diskPath(for: path))
+                try fm.removeItem(atPath: disk)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .noSuchFile, message: "\(error)", context: context)
@@ -433,8 +460,14 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
             guard let id: UInt32 = payload.readInteger(), let oldPath = try? payload.readSFTPString(),
                   let newPath = try? payload.readSFTPString()
             else { return }
+            guard let oldDisk = diskPath(for: oldPath, id: id, context: context),
+                  let newDisk = diskPath(for: newPath, id: id, context: context) else { return }
+            guard oldDisk != rootPath, newDisk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
-                try fm.moveItem(atPath: diskPath(for: oldPath), toPath: diskPath(for: newPath))
+                try fm.moveItem(atPath: oldDisk, toPath: newDisk)
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
                 sendStatus(id: id, code: .failure, message: "\(error)", context: context)
@@ -442,6 +475,11 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
 
         case .setstat:
             guard let id: UInt32 = payload.readInteger(), let path = try? payload.readSFTPString() else { return }
+            guard let disk = diskPath(for: path, id: id, context: context) else { return }
+            guard disk != rootPath else {
+                sendStatus(id: id, code: .permissionDenied, context: context)
+                return
+            }
             do {
                 let attrs = try SFTPFileAttributes.decode(from: &payload)
                 var fileAttrs: [FileAttributeKey: Any] = [:]
@@ -454,7 +492,7 @@ final class ServerSFTPHandler: ChannelDuplexHandler {
                 if let uid = attrs.uid { fileAttrs[.ownerAccountID] = uid }
                 if let gid = attrs.gid { fileAttrs[.groupOwnerAccountID] = gid }
                 if !fileAttrs.isEmpty {
-                    try fm.setAttributes(fileAttrs, ofItemAtPath: diskPath(for: path))
+                    try fm.setAttributes(fileAttrs, ofItemAtPath: disk)
                 }
                 sendStatus(id: id, code: .ok, context: context)
             } catch {
@@ -579,6 +617,13 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
     // Testservern tolererar bara en bunden port åt gången — tillräckligt för
     // testerna, ingen riktig produktionsbegränsning.
     private var forwarder: ServerRemoteForwarder?
+    private let channelClose: EventLoopFuture<Void>
+    private let withheldCancel: NIOLockedValueBox<Bool>?
+
+    init(channel: Channel, withheldCancel: NIOLockedValueBox<Bool>? = nil) {
+        self.channelClose = channel.closeFuture
+        self.withheldCancel = withheldCancel
+    }
 
     func tcpForwardingRequest(
         _ request: GlobalRequest.TCPForwardingRequest,
@@ -593,6 +638,15 @@ final class ServerRemoteForwardingDelegate: GlobalRequestDelegate {
                 .map { GlobalRequest.TCPForwardingResponse(boundPort: $0) }
                 .cascade(to: promise)
         case .cancel:
+            if let withheldCancel {
+                withheldCancel.withLockedValue { $0 = true }
+                let forwarder = self.forwarder
+                channelClose.whenComplete { _ in
+                    forwarder?.stopListening()
+                    promise.fail(ChannelError.eof)
+                }
+                return
+            }
             forwarder?.stopListening()
             forwarder = nil
             promise.succeed(GlobalRequest.TCPForwardingResponse(boundPort: nil))
@@ -618,6 +672,7 @@ struct LoopbackServer {
     /// `nil` om `start(silenceable:)` inte bad om det. Sätt till `true` för
     /// att låta servern sluta svara utan att stänga anslutningen.
     let silent: NIOLockedValueBox<Bool>?
+    let withheldCancel: NIOLockedValueBox<Bool>?
     var port: Int { channel.localAddress?.port ?? 0 }
 
     /// `realDirectTCPIPForwarding`: `false` (default) ekar bara tillbaka
@@ -631,20 +686,26 @@ struct LoopbackServer {
     static func start(
         password: String? = nil, authorizedPublicKey: NIOSSHPublicKey? = nil,
         realDirectTCPIPForwarding: Bool = false, realExec: Bool = false,
-        trackWindowChanges: Bool = false, silenceable: Bool = false
+        trackWindowChanges: Bool = false, silenceable: Bool = false,
+        withholdCancelReply: Bool = false, globalRequestDelegate: GlobalRequestDelegate? = nil,
+        directTCPIPGate: (@Sendable (Channel) -> EventLoopFuture<Void>)? = nil
     ) throws -> LoopbackServer {
         // Real execution must not be reachable using a known test password or key.
         precondition(!realExec || (password == nil && authorizedPublicKey == nil))
+        var template = Array((NSTemporaryDirectory() + "bastion-sftp-test-XXXXXX").utf8CString)
+        guard mkdtemp(&template) != nil else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        let sftpRoot = String(cString: template)
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let hostKey = NIOSSHPrivateKey(ed25519Key: .init())
         let clientKey = realExec ? Curve25519.Signing.PrivateKey() : nil
         let allowedKey = clientKey.map { NIOSSHPrivateKey(ed25519Key: $0).publicKey } ?? authorizedPublicKey
-        let sftpRoot = NSTemporaryDirectory() + "bastion-sftp-test-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: sftpRoot, withIntermediateDirectories: true)
         let observedDirectTCPIPTargets = NIOLockedValueBox<[(host: String, port: Int)]>([])
         let observedWindowChanges: NIOLockedValueBox<[(cols: Int, rows: Int)]>? =
             trackWindowChanges ? NIOLockedValueBox([]) : nil
         let silent: NIOLockedValueBox<Bool>? = silenceable ? NIOLockedValueBox(false) : nil
+        let withheldCancel: NIOLockedValueBox<Bool>? = withholdCancelReply ? NIOLockedValueBox(false) : nil
         let realForwarder = makeRealDirectTCPIPForwarder(group: group)
         let bootstrap = ServerBootstrap(group: group)
             .childChannelInitializer { channel in
@@ -653,7 +714,8 @@ struct LoopbackServer {
                         role: .server(.init(
                             hostKeys: [hostKey],
                             userAuthDelegate: ServerAuth(password: password, authorizedPublicKey: allowedKey),
-                            globalRequestDelegate: ServerRemoteForwardingDelegate())),
+                            globalRequestDelegate: globalRequestDelegate
+                                ?? ServerRemoteForwardingDelegate(channel: channel, withheldCancel: withheldCancel))),
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: { child, channelType in
                             switch channelType {
@@ -663,6 +725,11 @@ struct LoopbackServer {
                                 }
                                 if realDirectTCPIPForwarding {
                                     return realForwarder(child, channelType)
+                                }
+                                if let directTCPIPGate {
+                                    return directTCPIPGate(child).flatMap {
+                                        child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
+                                    }
                                 }
                                 return child.pipeline.addHandler(ServerDirectTCPIPEchoHandler())
                             default:
@@ -680,7 +747,7 @@ struct LoopbackServer {
             sftpRoot: sftpRoot,
             observedDirectTCPIPTargets: observedDirectTCPIPTargets,
             observedWindowChanges: observedWindowChanges,
-            silent: silent)
+            silent: silent, withheldCancel: withheldCancel)
     }
 
     func shutdown() {

@@ -183,7 +183,7 @@ final class SOCKSHandshakeHandler: ChannelInboundHandler {
 /// vid körning istället för fast vid uppstart.
 public final class DynamicPortForward {
     private let serverChannel: Channel
-    private let activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>
+    private let activeChannels: ForwardConnections
     public let bindHost: String
     public let bindPort: Int
 
@@ -192,7 +192,7 @@ public final class DynamicPortForward {
     public var actualBindPort: Int { serverChannel.localAddress?.port ?? bindPort }
 
     init(
-        serverChannel: Channel, activeChannels: NIOLockedValueBox<[ObjectIdentifier: Channel]>,
+        serverChannel: Channel, activeChannels: ForwardConnections,
         bindHost: String, bindPort: Int
     ) {
         self.serverChannel = serverChannel
@@ -202,11 +202,7 @@ public final class DynamicPortForward {
     }
 
     public func close() async {
-        let channels = activeChannels.withLockedValue { $0 }
-        for (_, channel) in channels {
-            try? await channel.close().get()
-        }
-        try? await serverChannel.close().get()
+        await activeChannels.close(serverChannel: serverChannel)
     }
 }
 
@@ -232,22 +228,20 @@ extension SSHSession {
         // Samma mönster som openLocalPortForward: skapas FÖRE bind(), inte
         // efteråt — annars kunde en klient hinna ansluta mellan bind() och
         // konstruktionen, och den anslutningen skulle aldrig spåras/stängas.
-        let activeChannels = NIOLockedValueBox<[ObjectIdentifier: Channel]>([:])
+        let activeChannels = ForwardConnections()
         let serverChannel: Channel
         do {
             serverChannel = try await ServerBootstrap(group: group)
                 .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
                 .childChannelInitializer { inboundChannel in
-                    let id = ObjectIdentifier(inboundChannel)
-                    activeChannels.withLockedValue { $0[id] = inboundChannel }
-                    inboundChannel.closeFuture.whenComplete { _ in
-                        activeChannels.withLockedValue { _ = $0.removeValue(forKey: id) }
+                    guard activeChannels.register(inboundChannel) else {
+                        return inboundChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
                     }
                     let handshake = SOCKSHandshakeHandler(
                         onRequest: { request, leftover in
                             Self.completeSOCKSConnect(
                                 inboundChannel: inboundChannel, request: request,
-                                leftover: leftover, sshHandler: sshHandler)
+                                leftover: leftover, sshHandler: sshHandler, activeChannels: activeChannels)
                         },
                         onError: { _ in inboundChannel.close(promise: nil) }
                     )
@@ -271,9 +265,14 @@ extension SSHSession {
     /// (samma resonemang som race-fixen i `PortForward.swift`, bara att här
     /// finns aldrig en `await`-brygga att undvika i första taget).
     private static func completeSOCKSConnect(
-        inboundChannel: Channel, request: SOCKSConnectRequest, leftover: ByteBuffer, sshHandler: NIOSSHHandler
+        inboundChannel: Channel, request: SOCKSConnectRequest, leftover: ByteBuffer, sshHandler: NIOSSHHandler,
+        activeChannels: ForwardConnections
     ) {
         guard let originatorAddress = inboundChannel.remoteAddress else {
+            inboundChannel.close(promise: nil)
+            return
+        }
+        guard let open = activeChannels.beginOpen(on: inboundChannel.eventLoop) else {
             inboundChannel.close(promise: nil)
             return
         }
@@ -286,12 +285,16 @@ extension SSHSession {
             guard case .directTCPIP = channelType else {
                 return inboundChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("fel kanaltyp"))
             }
+            guard activeChannels.register(childChannel) else {
+                return childChannel.eventLoop.makeFailedFuture(SSHError.channelFailed("forward closed"))
+            }
             return childChannel.eventLoop.makeCompletedFuture {
                 try childChannel.pipeline.syncOperations.addHandler(DirectTCPIPWrapperHandler())
             }
         }
 
         channelPromise.futureResult.whenComplete { result in
+            defer { open.succeed(()) }
             switch result {
             case .success(let sshChildChannel):
                 // Bytt ur SOCKS-handskakningshandlern och kopplar in

@@ -66,9 +66,9 @@ public final class SSHSession {
     // inboundChildChannelInitializer sätts en gång vid connect() (innan någon
     // openRemotePortForward()-anrop kan ha hunnit ske), så routningen måste gå
     // via en delad, trådsäker tabell istället för att fångas direkt i closuren.
-    // Keyad enbart på port (inte host) — tillräckligt för det vanliga fallet
-    // av en vidarebefordran per port, se PortForward.swift.
-    let remoteForwards = NIOLockedValueBox<[Int: (targetHost: String, targetPort: Int)]>([:])
+    // The wire routing key is only the port, so each port must be reserved
+    // before a listen request and until cancellation is confirmed.
+    let remoteForwards = NIOLockedValueBox<[Int: RemoteForwardReservation]>([:])
 
     public init(target: SSHTarget, auth: SSHAuth, knownHosts: KnownHosts = KnownHosts()) {
         self.target = target

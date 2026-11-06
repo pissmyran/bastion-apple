@@ -250,6 +250,89 @@ final class SFTPClientTests: XCTestCase {
         await session.close()
     }
 
+    func testRejectedPathsCannotTouchFallbackOrFollowSymlinks() async throws {
+        let server = try LoopbackServer.start(password: "hunter2")
+        defer { server.shutdown() }
+        let fm = FileManager.default
+        let outside = NSTemporaryDirectory() + "bastion-outside-\(UUID().uuidString)"
+        try fm.createDirectory(atPath: outside, withIntermediateDirectories: false)
+        defer { try? fm.removeItem(atPath: outside) }
+        let victim = outside + "/victim"
+        try "original".write(toFile: victim, atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(atPath: server.sftpRoot + "/__blocked_path_traversal__", withDestinationPath: victim)
+        try fm.createSymbolicLink(atPath: server.sftpRoot + "/link", withDestinationPath: outside)
+
+        let session = try await connectedSession(server)
+        let sftp = try await SFTPClient.open(on: session)
+        try await sftp.writeFile("inside", data: [1])
+
+        func rejected(_ operation: () async throws -> Void) async throws {
+            do {
+                try await operation()
+                XCTFail("Expected path rejection")
+            } catch let error as SFTPStatusError {
+                XCTAssertEqual(error.code, .noSuchFile)
+            }
+        }
+
+        let escaped = "../../outside"
+        try await rejected { _ = try await sftp.readFile(escaped) }
+        try await rejected { try await sftp.writeFile(escaped, data: [2]) }
+        try await rejected { _ = try await sftp.stat(escaped) }
+        try await rejected { _ = try await sftp.listDirectory(escaped) }
+        try await rejected { try await sftp.mkdir(escaped) }
+        try await rejected { try await sftp.remove(escaped) }
+        try await rejected { try await sftp.rmdir(escaped) }
+        try await rejected { try await sftp.rename(escaped, to: "new") }
+        try await rejected { try await sftp.rename("inside", to: escaped) }
+        try await rejected { try await sftp.setPermissions(escaped, mode: 0o777) }
+        try await rejected { _ = try await sftp.readFile("link/victim") }
+        try await rejected { try await sftp.writeFile("link/victim", data: [3]) }
+        try await rejected { try await sftp.remove("link/victim") }
+        try await rejected { try await sftp.mkdir("link/new") }
+        try await rejected { try await sftp.setPermissions(".\0/ignored", mode: 0o777) }
+
+        XCTAssertEqual(try String(contentsOfFile: victim, encoding: .utf8), "original")
+        XCTAssertTrue(fm.fileExists(atPath: server.sftpRoot + "/inside"))
+        XCTAssertFalse(fm.fileExists(atPath: outside + "/new"))
+        await sftp.close()
+        await session.close()
+    }
+
+    func testSFTPRootRemainsPrivateAndCannotBeReplaced() async throws {
+        let server = try LoopbackServer.start(password: "hunter2")
+        defer { server.shutdown() }
+        let fm = FileManager.default
+        let session = try await connectedSession(server)
+        let sftp = try await SFTPClient.open(on: session)
+
+        func rootMode() throws -> UInt16 {
+            let attrs = try fm.attributesOfItem(atPath: server.sftpRoot)
+            return (attrs[.posixPermissions] as? NSNumber)?.uint16Value ?? 0
+        }
+        XCTAssertEqual(try rootMode() & 0o777, 0o700)
+
+        func denied(_ operation: () async throws -> Void) async throws {
+            do {
+                try await operation()
+                XCTFail("Expected root protection")
+            } catch let error as SFTPStatusError {
+                XCTAssertEqual(error.code, .permissionDenied)
+            }
+        }
+        try await denied { try await sftp.setPermissions("/", mode: 0o777) }
+        try await denied { try await sftp.chown("./", uid: UInt32(getuid()), gid: UInt32(getgid())) }
+        try await denied { try await sftp.rmdir(".") }
+        try await denied { try await sftp.remove("/") }
+        try await denied { try await sftp.rename(".", to: "moved") }
+        XCTAssertEqual(try rootMode() & 0o777, 0o700)
+        try await sftp.writeFile("still-usable", data: [42])
+        let contents = try await sftp.readFile("still-usable")
+        XCTAssertEqual(contents, [42])
+        await sftp.close()
+        await session.close()
+    }
+
     func testWriteFileRejectsZeroChunkSize() async throws {
         let server = try LoopbackServer.start(password: "hunter2")
         defer { server.shutdown() }
