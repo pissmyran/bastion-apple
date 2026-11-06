@@ -128,6 +128,9 @@ jobs:
       # CodeQL only analyzes sources that are compiled while it traces the build.
       # The root package covers Sources/; the three app targets cover App/ and
       # App/TVApp/ (they are built unsigned, nothing is archived or uploaded).
+      # -skipPackagePluginValidation: SwiftTerm ships a build plugin that Xcode
+      # otherwise asks to trust, a prompt that cannot be answered in CI (the
+      # fastlane builds pass the same flag).
       - name: Build the Swift package
         run: swift build
       - name: Generate the Xcode project
@@ -144,6 +147,7 @@ jobs:
               -project App/Bastion.xcodeproj \
               -scheme "${scheme}" \
               -destination "${destination}" \
+              -skipPackagePluginValidation \
               CODE_SIGNING_ALLOWED=NO \
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGN_IDENTITY=""
