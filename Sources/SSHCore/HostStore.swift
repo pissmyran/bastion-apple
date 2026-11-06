@@ -115,33 +115,66 @@ public final class HostStore: @unchecked Sendable {
     @discardableResult
     public func importSSHConfig(_ text: String) -> [Host] {
         let config = SSHConfig(text: text)
-        let candidates = Host.imported(from: config).map { host in
-            (host, config.resolve(host.alias).proxyJump.flatMap(SSHConfig.proxyJumpAlias))
+        let candidates = Host.imported(from: config).map { host -> (Host, ImportedJump) in
+            guard let raw = config.resolve(host.alias).proxyJump else { return (host, .none) }
+            let value = raw.trimmingCharacters(in: .whitespaces)
+            if value.lowercased() == "none" { return (host, .none) }
+            guard !value.contains(","), let alias = SSHConfig.proxyJumpAlias(value) else {
+                return (host, .unsupported)
+            }
+            return (host, .alias(alias))
         }
 
         return lock.withLock {
-            let existing = Set(byID.values.map { $0.alias.lowercased() })
-            let fresh = candidates.filter { !existing.contains($0.0.alias.lowercased()) }
-            guard !fresh.isEmpty else { return [] }
+            var seen = Set(byID.values.map { $0.alias.lowercased() })
+            var fresh = candidates.filter { seen.insert($0.0.alias.lowercased()).inserted }
 
             // Link ProxyJump after every new host has an ID: the jump host may
             // come after the host that uses it. Only newly imported hosts get a
             // link; existing hosts are never rewritten, since the user may have
             // set them up. ProxyJump is the setting most missed when dropped:
-            // the target is often reachable only through the jump.
-            var byAlias: [String: UUID] = [:]
-            let hosts = Array(byID.values) + fresh.map { $0.0 }
-            for host in hosts.sorted(by: { $0.alias.lowercased() < $1.alias.lowercased() }) {
-                byAlias[host.alias.lowercased()] = host.id
-            }
+            // the target is often reachable only through the jump, and without
+            // it the app would connect directly. So a host whose jump cannot be
+            // linked is skipped, and so is every host that depends on it; repeat
+            // until stable. A jump cannot be linked when it is unresolved, points
+            // at the host itself, lists several hops, or points at a host that
+            // has a jump of its own (`ConnectionPlanning` supports one hop).
             var linked: [Host] = []
-            for (host, jumpAlias) in fresh {
-                var updated = host
-                if let jumpAlias, let jumpID = byAlias[jumpAlias.lowercased()], jumpID != host.id {
-                    updated.jumpHostID = jumpID
+            while true {
+                // Alias -> (id, whether that host has a jump of its own).
+                var byAlias: [String: (id: UUID, hasJump: Bool)] = [:]
+                let existing = byID.values.sorted { $0.alias.lowercased() < $1.alias.lowercased() }
+                for host in existing { byAlias[host.alias.lowercased()] = (host.id, host.jumpHostID != nil) }
+                for (host, jump) in fresh {
+                    if case .alias = jump {
+                        byAlias[host.alias.lowercased()] = (host.id, true)
+                    } else {
+                        byAlias[host.alias.lowercased()] = (host.id, false)
+                    }
                 }
-                linked.append(updated)
-                var stored = updated
+                linked = []
+                var kept: [(Host, ImportedJump)] = []
+                for (host, jump) in fresh {
+                    var updated = host
+                    switch jump {
+                    case .none:
+                        break
+                    case .unsupported:
+                        continue
+                    case .alias(let alias):
+                        guard let target = byAlias[alias.lowercased()], target.id != host.id,
+                              !target.hasJump else { continue }
+                        updated.jumpHostID = target.id
+                    }
+                    linked.append(updated)
+                    kept.append((host, jump))
+                }
+                if kept.count == fresh.count { break }
+                fresh = kept
+            }
+            guard !linked.isEmpty else { return [] }
+            for host in linked {
+                var stored = host
                 stored.modifiedAt = Date()
                 byID[stored.id] = stored
                 tombstones[stored.id] = nil
@@ -149,6 +182,12 @@ public final class HostStore: @unchecked Sendable {
             persist()
             return linked
         }
+    }
+
+    private enum ImportedJump {
+        case none
+        case alias(String)
+        case unsupported
     }
 
     /// Full synkrunda mot en transport: hämta fjärrtillstånd, slå ihop lokalt,

@@ -31,6 +31,8 @@ struct ImportConfigView: View {
                 }
                 Text("…eller klistra in innehållet i din ssh-config:")
                     .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+                Text("Värdar med olösta, självpekande eller flera ProxyJump-hopp, eller hopp via en värd som själv har ett hopp, importeras inte, inte heller värdar som beror på dem. Kontrollera konfigurationen och importera igen.")
+                    .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
                 TextEditor(text: $text)
                     .font(.system(.footnote, design: .monospaced))
                     .autocorrectionDisabled()
