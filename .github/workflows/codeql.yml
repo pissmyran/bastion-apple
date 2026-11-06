@@ -125,8 +125,29 @@ jobs:
         with:
           languages: swift
           build-mode: manual
-      - name: Build
+      # CodeQL only analyzes sources that are compiled while it traces the build.
+      # The root package covers Sources/; the three app targets cover App/ and
+      # App/TVApp/ (they are built unsigned, nothing is archived or uploaded).
+      - name: Build the Swift package
         run: swift build
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          sh App/generate-project.sh
+      - name: Build the app targets
+        run: |
+          set -euo pipefail
+          for target in "Bastion|generic/platform=iOS" "Bastion-macOS|generic/platform=macOS" "Bastion-tvOS|generic/platform=tvOS"; do
+            scheme="${target%%|*}"
+            destination="${target##*|}"
+            xcodebuild build \
+              -project App/Bastion.xcodeproj \
+              -scheme "${scheme}" \
+              -destination "${destination}" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY=""
+          done
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: "/language:swift"
