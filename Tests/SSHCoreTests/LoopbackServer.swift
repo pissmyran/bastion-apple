@@ -95,8 +95,8 @@ final class ServerExecHandler: ChannelDuplexHandler, RemovableChannelHandler {
             return
         }
         let outputData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        // Foundation skördar själv barnprocessen; ett eget waitpid kan förlora racet
-        // och ge status 0 trots att kommandot misslyckades.
+        // Foundation reaps the child process itself; a separate waitpid can lose the
+        // race and leave status 0 even though the command failed.
         process.waitUntilExit()
         let exitCode = process.terminationReason == .exit ? process.terminationStatus : 128 + process.terminationStatus
         var buf = context.channel.allocator.buffer(capacity: outputData.count)
