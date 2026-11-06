@@ -63,15 +63,47 @@ final class ArchiveOperationsTests: XCTestCase {
     // MARK: - Riktig körning mot en RIKTIG tar/zip (LoopbackServer realExec: true)
 
     private func connectedRealExecSession(_ server: LoopbackServer) async throws -> SSHSession {
+        let auth = try XCTUnwrap(server.realExecAuth)
         let session = SSHSession(
             target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
-            auth: .password("hunter2"), knownHosts: KnownHosts(path: nil))
+            auth: auth, knownHosts: KnownHosts(path: nil))
         try await session.connect()
         return session
     }
 
+    func testRealExecRejectsOtherKeysAndPasswords() async throws {
+        let server = try LoopbackServer.start(realExec: true)
+        defer { server.shutdown() }
+        let otherServer = try LoopbackServer.start(realExec: true)
+        defer { otherServer.shutdown() }
+        let otherServerAuth = try XCTUnwrap(otherServer.realExecAuth)
+        let unrelatedKey = KeyGenerator.generateEd25519()
+        let marker = server.sftpRoot + "/unauthorized"
+
+        for auth in [otherServerAuth, .ed25519Seed(unrelatedKey.seed), .password("hunter2")] {
+            let session = SSHSession(
+                target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+                auth: auth, knownHosts: KnownHosts(path: nil))
+            try await session.connect()
+            let error: Error? = try await withTimeout(seconds: 20) {
+                do {
+                    _ = try await session.run("touch unauthorized")
+                    return nil
+                } catch {
+                    return error
+                }
+            }
+            await session.close()
+            guard let sshError = error as? SSHError, case .authenticationFailed = sshError else {
+                XCTFail("Expected authentication failure, got \(String(describing: error))")
+                return
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker))
+    }
+
     func testCreateThenExtractTarGzRoundTripsRealFiles() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        let server = try LoopbackServer.start(realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 
@@ -95,7 +127,7 @@ final class ArchiveOperationsTests: XCTestCase {
     }
 
     func testCreateThenExtractZipRoundTripsRealFiles() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        let server = try LoopbackServer.start(realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 
@@ -121,7 +153,7 @@ final class ArchiveOperationsTests: XCTestCase {
     /// kommandosträngen "ser citerad ut" (se ovan), utan att den skadliga
     /// filen aldrig skapas när kommandot verkligen exekveras.
     func testCreateTarGzRejectsInjectionAttemptInPathAgainstRealShell() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        let server = try LoopbackServer.start(realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 
@@ -148,7 +180,7 @@ final class ArchiveOperationsTests: XCTestCase {
     /// manuellt mot en riktig zip/unzip-binär innan fixen skrevs, se
     /// kommentarerna i ArchiveOperations.swift.
     func testCreateThenExtractZipHandlesDashPrefixedNamesAgainstRealZip() async throws {
-        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
+        let server = try LoopbackServer.start(realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 
