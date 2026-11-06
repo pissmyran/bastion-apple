@@ -2,7 +2,7 @@
 
 ## Before every push
 
-There are no build or test checks in CI. The tests below are the only test gate, so they run locally before every push:
+CI builds and tests the Swift package on macOS only when a `.swift` file or a file under `Tests/fixtures/` changes (see [In CI](#in-ci)), and not for other changes. Run the tests below locally before every push:
 
 Build and test the Swift package (works on Linux and macOS):
 
@@ -30,7 +30,8 @@ The apps cannot be built on Linux. If a target could not be built or tested, say
 
 ## In CI
 
-- **CodeQL** (GitHub's default setup) analyzes the code on every pull request and on `main`. Errors and serious security alerts block merging.
+- **Swift** (`.github/workflows/swift.yml`) runs `swift build` and `swift test` on macOS for pushes to `main` and pull requests, only when a `.swift` file or a file under `Tests/fixtures/` changes.
+- **CodeQL** (advanced setup, `.github/workflows/codeql.yml`) analyzes the code on pull requests and on `main`. The branch ruleset requires CodeQL results for JavaScript/TypeScript, Python and Ruby on every pull request, so those three languages always run on pull requests, including documentation-only ones. Actions runs when `.github/workflows` or `.github/actions` change, and Swift when `.swift`, `Package.swift`, `Package.resolved` or anything under `Sources/`, `App/`, `Tests/SSHCoreTests/` or `Tests/fixtures/` changes. Changing the CodeQL workflow itself runs every language. Pushes to `main` skip changes that only touch `docs/` (except `docs/prototype/`), `*.md` or `zensical.toml`, and otherwise run all languages, so the `Analyze (swift)` check required for releases exists. GitHub's default setup must stay disabled (Settings > Code security > Code scanning), because GitHub rejects advanced-setup uploads while it is enabled. Errors and serious security alerts block merging.
 - **The documentation** is built strictly with Zensical when `docs/` or `zensical.toml` changes in a pull request.
 - **The release** waits for the checks in `.github/release-required-checks` (today `Analyze (swift)`); see [Releases](release.md).
 - **The Wiki** is regenerated from `README.md` and `docs/` on every push to `main` that touches them (`.github/workflows/wiki-sync.yml`).
@@ -53,7 +54,7 @@ Check in this order:
 
 ## CodeRabbit configuration
 
-The root `.coderabbit.yaml` inherits shared settings from `Myrpisset/coderabbit`.
+The root `.coderabbit.yaml` inherits shared settings from `Pissmyran/coderabbit`.
 Keep shared settings there; local path instructions cover Apple security,
 dependency and target boundaries, credential storage and verification evidence.
 The linked Bastion hub provides shared documentation context; Linux, Windows and

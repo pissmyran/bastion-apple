@@ -266,6 +266,54 @@ final class HostStoreTests: XCTestCase {
         XCTAssertEqual(store.get(inre!.id)?.jumpHostID, hopp?.id)
     }
 
+    func testImportPersistsCompleteBatchAndPreservesExistingState() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let path = dir.appendingPathComponent("hosts.json").path
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = HostStore(path: path)
+        let existing = Host(alias: "existing", hostName: "original.example", user: "u")
+        let deleted = Host(alias: "deleted", hostName: "deleted.example", user: "u")
+        store.upsert(existing)
+        store.upsert(deleted)
+        store.delete(deleted.id)
+        let original = store.get(existing.id)
+
+        let config = """
+        Host EXISTING
+            HostName replacement.example
+            User u
+        Host target
+            User u
+            ProxyJump jump
+        Host jump
+            User u
+            ProxyJump existing
+        """
+        let imported = store.importSSHConfig(config)
+        XCTAssertEqual(imported.count, 2)
+        let target = try XCTUnwrap(imported.first { $0.alias == "target" })
+        let jump = try XCTUnwrap(imported.first { $0.alias == "jump" })
+        XCTAssertEqual(target.jumpHostID, jump.id)
+        XCTAssertEqual(jump.jumpHostID, existing.id)
+        XCTAssertTrue(store.importSSHConfig(config).isEmpty)
+
+        let reloaded = HostStore(path: path)
+        XCTAssertEqual(reloaded.get(existing.id), original)
+        XCTAssertEqual(reloaded.get(target.id)?.jumpHostID, jump.id)
+        XCTAssertEqual(reloaded.get(jump.id)?.jumpHostID, existing.id)
+        XCTAssertNotNil(reloaded.exportState().tombstones[deleted.id])
+        XCTAssertEqual(reloaded.all().count, 3)
+    }
+
+    func testConcurrentImportsDoNotDuplicateAliases() {
+        let store = HostStore(path: nil)
+        let config = "Host server\n User u\n"
+        DispatchQueue.concurrentPerform(iterations: 20) { _ in
+            store.importSSHConfig(config)
+        }
+        XCTAssertEqual(store.all().map(\.alias), ["server"])
+    }
+
     /// Pekar ProxyJump på något som inte importerades ska värden ändå sparas,
     /// bara utan koppling. En värd som anger sig själv länkas inte heller.
     func testAnUnresolvableOrSelfReferentialProxyJumpStillImports() {

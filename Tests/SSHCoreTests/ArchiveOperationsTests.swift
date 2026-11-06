@@ -202,7 +202,7 @@ final class ArchiveOperationsTests: XCTestCase {
         await session.close()
     }
     func testZipExtractionRejectsEscapesAndDoesNotFollowLinks() async throws {
-        let server = try LoopbackServer.start(realExec: true)
+        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 
@@ -265,7 +265,7 @@ final class ArchiveOperationsTests: XCTestCase {
     }
 
     func testZipExtractionRefusesArchivesLargerThanFreeSpace() async throws {
-        let server = try LoopbackServer.start(realExec: true)
+        let server = try LoopbackServer.start(password: "hunter2", realExec: true)
         defer { server.shutdown() }
         let session = try await connectedRealExecSession(server)
 

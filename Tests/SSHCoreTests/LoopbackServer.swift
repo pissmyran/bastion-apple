@@ -105,9 +105,10 @@ final class ServerExecHandler: ChannelDuplexHandler, RemovableChannelHandler {
             return
         }
         let outputData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        var status: Int32 = 0
-        waitpid(process.processIdentifier, &status, 0)
-        let exitCode = (status >> 8) & 0xFF
+        // Foundation reaps the child process itself; a separate waitpid can lose the
+        // race and leave status 0 even though the command failed.
+        process.waitUntilExit()
+        let exitCode = process.terminationReason == .exit ? process.terminationStatus : 128 + process.terminationStatus
         var buf = context.channel.allocator.buffer(capacity: outputData.count)
         buf.writeBytes(outputData)
         context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buf))), promise: nil)

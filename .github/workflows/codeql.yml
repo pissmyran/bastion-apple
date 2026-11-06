@@ -1,0 +1,125 @@
+name: CodeQL
+
+# Advanced setup replacing GitHub's default setup (disable the default setup in
+# Settings > Code security, the two cannot run together). The branch ruleset
+# requires CodeQL results for JavaScript/TypeScript, Python and Ruby on every
+# pull request, so those three always run. Actions and Swift (the macOS
+# analysis) run on pull requests only when files of that language change.
+# Pushes to main skip documentation-only changes and always run every
+# language, so the "Analyze (swift)" check required by release.yml exists for
+# every release commit.
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!zensical.toml"
+      - "docs/prototype/**"
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "17 4 * * 1"
+
+concurrency:
+  group: codeql-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed languages
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.diff.outputs.matrix }}
+      has_matrix: ${{ steps.diff.outputs.has_matrix }}
+      swift: ${{ steps.diff.outputs.swift }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT}" = "pull_request" ]; then
+            files="$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")"
+          else
+            files=""
+          fi
+
+          matches() {
+            # Everything runs outside pull requests, and when this workflow changes.
+            [ "${EVENT}" != "pull_request" ] && return 0
+            grep -Eq '^\.github/workflows/codeql\.yml$' <<< "${files}" && return 0
+            grep -Eq "$1" <<< "${files}"
+          }
+
+          # The ruleset requires these three on every pull request.
+          languages=(javascript-typescript python ruby)
+          matches '^\.github/(workflows|actions)/' && languages+=(actions)
+
+          if [ "${#languages[@]}" -gt 0 ]; then
+            matrix="$(printf '%s\n' "${languages[@]}" | jq -R . | jq -sc '{include: map({language: .})}')"
+            echo "has_matrix=true" >> "$GITHUB_OUTPUT"
+          else
+            matrix='{"include":[]}'
+            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+          if matches '^(Sources/|App/|Tests/SSHCoreTests/|Tests/fixtures/|Package\.swift$|Package\.resolved$)|\.swift$'; then
+            echo "swift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swift=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.has_matrix == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  analyze-swift:
+    name: Analyze (swift)
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: swift
+          build-mode: manual
+      - name: Build
+        run: swift build
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:swift"

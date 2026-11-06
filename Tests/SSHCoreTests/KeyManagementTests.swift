@@ -45,6 +45,19 @@ final class KeyGeneratorTests: XCTestCase {
         XCTAssertThrowsError(try KeyGenerator.fromExisting(seed: Data([1, 2, 3])))
     }
 
+    func testUnsafeCommentsAreOmittedFromGeneratedAndImportedKeys() throws {
+        let original = KeyGenerator.generateEd25519()
+        for comment in ["alias\nssh-ed25519 attacker", "alias\rssh-ed25519 attacker",
+                        "alias\r\nssh-ed25519 attacker", "alias\0extra"] {
+            let generated = KeyGenerator.generateEd25519(comment: comment)
+            XCTAssertEqual(generated.publicKeyLine.split(separator: " ").count, 2)
+            let imported = try KeyGenerator.fromExisting(seed: original.seed, comment: comment)
+            XCTAssertEqual(imported.publicKeyLine, original.publicKeyLine)
+        }
+        let literal = #"alias\nssh-ed25519 attacker"#
+        XCTAssertTrue(KeyGenerator.generateEd25519(comment: literal).publicKeyLine.hasSuffix(literal))
+    }
+
     /// Hela vägen runt: export -> parse -> fromExisting -> samma publika
     /// nyckel som den ALLRA första generate()-anropet gav — bevisar att en
     /// nyckel som lämnat Bastion (exporterad, t.ex. till en fil) och sedan
@@ -177,6 +190,70 @@ final class DeployPublicKeyCommandTests: XCTestCase {
         // Den escapade formen ska finnas — INTE den råa, oescapade strängen
         // (vilket skulle betyda att den läckt ut ur citattecknen).
         XCTAssertFalse(cmd.contains("AAAAtest '; rm -rf ~ #'"))
+    }
+
+    func testPOSIXWritesLiteralBackslashesAndIsIdempotent() throws {
+        let dir = NSTemporaryDirectory() + "bastion-deploy-test-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let line = #"ssh-ed25519 AAAAtest comment\nssh-ed25519 attacker \c o'brien"#
+        let command = deployPublicKeyCommandPOSIX(line)
+        for _ in 0..<2 {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+            var environment = ProcessInfo.processInfo.environment
+            environment["HOME"] = dir
+            process.environment = environment
+            try process.run()
+            process.waitUntilExit()
+            XCTAssertEqual(process.terminationStatus, 0)
+        }
+        let contents = try String(contentsOfFile: dir + "/.ssh/authorized_keys", encoding: .utf8)
+        XCTAssertEqual(contents, line + "\n")
+    }
+
+    func testDeploymentRejectsRecordSeparatorsOnAllPlatforms() async throws {
+        let server = try LoopbackServer.start(password: "test")
+        defer { server.shutdown() }
+        let session = SSHSession(
+            target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+            auth: .password("test"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        for platform in RemotePlatform.allCases {
+            for line in ["", "   ", "ssh-ed25519 key\nssh-ed25519 attacker",
+                         "ssh-ed25519 key\rssh-ed25519 attacker",
+                         "ssh-ed25519 key\r\nssh-ed25519 attacker", "ssh-ed25519 key\0extra"] {
+                do {
+                    try await session.deployPublicKey(line, platform: platform)
+                    XCTFail("Accepted invalid input on \(platform)")
+                } catch SSHKeyError.malformed {
+                    // Invalid input must be rejected even with a live session.
+                } catch {
+                    XCTFail("Unexpected error: \(error)")
+                }
+            }
+        }
+        await session.close()
+    }
+
+    func testDeploymentAcceptsSingleLineOnAllPlatforms() async throws {
+        let server = try LoopbackServer.start(password: "test")
+        defer { server.shutdown() }
+        let session = SSHSession(
+            target: SSHTarget(host: "127.0.0.1", port: server.port, username: "tester"),
+            auth: .password("test"), knownHosts: KnownHosts(path: nil))
+        try await session.connect()
+        do {
+            let line = KeyGenerator.generateEd25519(comment: #"test\n o'brien"#).publicKeyLine
+            for platform in RemotePlatform.allCases {
+                try await session.deployPublicKey(line, platform: platform)
+            }
+            await session.close()
+        } catch {
+            await session.close()
+            throw error
+        }
     }
 }
 
