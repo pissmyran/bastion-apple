@@ -40,6 +40,10 @@ Explicit links to the Bastion hub, Linux, Windows and Android repositories suppo
 cross-platform documentation and sync compatibility reviews. See
 [review configuration verification](docs/operations.md#coderabbit-configuration).
 
+## CodeQL
+
+CodeQL runs from [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (advanced setup). GitHub's default setup must stay disabled. Which languages run when, including the Swift analysis of the app targets, is described in [CI](docs/operations.md#in-ci).
+
 ## More
 
 - [The documentation](https://docs.denied.se/bastion-apple/): getting started, architecture, operations, sync format and releases

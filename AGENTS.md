@@ -66,6 +66,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 - **SSHCore is the source of the sync format.** If `Host`, `HostStore`, `Snippet`, `SyncEngine`, `SyncCrypto` or the fixtures in `Tests/fixtures/` change, follow `docs/sync-format.md`.
 - **Project generation** always goes through `App/generate-project.sh`, never `xcodegen` directly: the script reads the exact SwiftTerm version in `App/Package.swift` and generates from `App/project.dependencies.yml`, which includes `project.yml` and pins SwiftTerm to that version. `App/Package.swift` never becomes app source.
 - **The apps cannot be built on Linux.** Build and test the Swift package.
+- **CodeQL:** runs from `.github/workflows/codeql.yml` (advanced setup). GitHub's default setup must stay disabled, or the uploads fail. Which languages run when is described in [docs/operations.md](docs/operations.md#in-ci).
 - **Releases:** the pull request title decides the version; see `docs/release.md`.
 - **Extra care:** host key verification, session lifetime, sync format and encryption, OAuth and project generation in `App/`.
 
