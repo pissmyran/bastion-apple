@@ -24,7 +24,7 @@ All working commands are listed in `AGENTS.md`. Beyond those:
 
 ## Release
 
-Merging to `main` creates a SemVer tag and GitHub Release only when the commits since the previous release, or since `.github/release-baseline` when no tag exists (judged by PR title, Conventional Commits) require a version bump; a `docs:` merge alone does not release or publish documentation. Documentation is published from the tag to GitHub Pages. A release does not publish to any app store; distribution is a separate step. Details: `docs/release.md`.
+Merging to `main` creates a SemVer tag and GitHub Release only when the commits since the previous release, or since `.github/release-baseline` when no stable tag exists (judged by PR title, Conventional Commits) require a version bump; a `docs:` merge alone does not release or publish documentation. Documentation is published from the tag to GitHub Pages. A release does not publish to any app store; distribution is a separate step. Details: `docs/release.md`.
 
 ## Repo-specific rules
 
