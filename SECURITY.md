@@ -1,21 +1,21 @@
-# Security policy
+# Security Policy
 
 ## Reporting a vulnerability
 
-Do **not** report security vulnerabilities, secrets, tokens, private keys or other sensitive data in public issues, pull requests or discussions.
+Do not open a public issue for a vulnerability.
 
-In the repository where the problem is:
+Report it privately through GitHub:
 
-1. Open the **Security** tab.
-2. Choose **Report a vulnerability** if private vulnerability reporting is enabled.
-3. Describe the impact, the affected component, steps to reproduce and any suggested fix, without publishing the information anywhere else.
+1. Open the Security tab of this repository.
+2. Click "Report a vulnerability".
+3. Describe the problem and how to reproduce it.
 
-If **Report a vulnerability** is not available: open only a short public issue asking the maintainer for a private contact channel. Leave out every technical detail about the vulnerability.
+Reports are handled by a single maintainer on a best-effort basis. There is no guaranteed response time.
 
 ## Supported versions
 
-Security fixes are prioritized for the current default branch and, when the project uses releases, the latest supported release. Older branches and versions may not receive security updates.
+Only the latest release and the default branch receive security fixes.
 
-## Handling
+## Scope
 
-A report should contain enough information for the problem to be verified. Maintainers decide severity, scope, fix and any disclosure through GitHub's security features.
+Vulnerabilities in this repository's own code and configuration. Problems in third-party dependencies should be reported to those projects.
