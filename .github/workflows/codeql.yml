@@ -1,12 +1,13 @@
 name: CodeQL
 
 # Advanced setup replacing GitHub's default setup (disable the default setup in
-# Settings > Code security, the two cannot run together). It keeps the same
-# languages but does not run for documentation-only changes, and on pull
-# requests each language runs only when files of that language change (the
-# macOS Swift analysis included). Pushes to main always run every language, so
-# the "Analyze (swift)" check required by release.yml exists for every release
-# commit.
+# Settings > Code security, the two cannot run together). The branch ruleset
+# requires CodeQL results for JavaScript/TypeScript, Python and Ruby on every
+# pull request, so those three always run. Actions and Swift (the macOS
+# analysis) run on pull requests only when files of that language change.
+# Pushes to main skip documentation-only changes and always run every
+# language, so the "Analyze (swift)" check required by release.yml exists for
+# every release commit.
 
 on:
   push:
@@ -19,12 +20,6 @@ on:
       - "docs/prototype/**"
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "**"
-      - "!docs/**"
-      - "!**/*.md"
-      - "!zensical.toml"
-      - "docs/prototype/**"
   schedule:
     - cron: "17 4 * * 1"
 
@@ -67,11 +62,9 @@ jobs:
             grep -Eq "$1" <<< "${files}"
           }
 
-          languages=()
+          # The ruleset requires these three on every pull request.
+          languages=(javascript-typescript python ruby)
           matches '^\.github/(workflows|actions)/' && languages+=(actions)
-          matches '\.(js|jsx|mjs|cjs|ts|tsx|html)$|(^|/)package(-lock)?\.json$' && languages+=(javascript-typescript)
-          matches '\.py$' && languages+=(python)
-          matches '\.(rb|gemspec)$|(^|/)(Gemfile|Gemfile\.lock|Rakefile|Fastfile|Appfile|Matchfile|Pluginfile)$' && languages+=(ruby)
 
           if [ "${#languages[@]}" -gt 0 ]; then
             matrix="$(printf '%s\n' "${languages[@]}" | jq -R . | jq -sc '{include: map({language: .})}')"
