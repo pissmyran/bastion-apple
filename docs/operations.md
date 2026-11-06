@@ -53,7 +53,7 @@ Check in this order:
 
 ## CodeRabbit configuration
 
-The root `.coderabbit.yaml` inherits shared settings from `Myrpisset/coderabbit`.
+The root `.coderabbit.yaml` inherits shared settings from `Pissmyran/coderabbit`.
 Keep shared settings there; local path instructions cover Apple security,
 dependency and target boundaries, credential storage and verification evidence.
 The linked Bastion hub provides shared documentation context; Linux, Windows and

@@ -2,9 +2,9 @@
 
 # Bastion for Apple
 
-**Documentation:** [myrpisset.github.io/bastion-apple](https://myrpisset.github.io/bastion-apple/)
+**Documentation:** [docs.denied.se/bastion-apple](https://docs.denied.se/bastion-apple/)
 
-Bastion is an SSH client. This repo holds the version for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/Myrpisset/bastion-linux), [Bastion for Windows](https://github.com/Myrpisset/bastion-windows), [Bastion for Android](https://github.com/Myrpisset/bastion-android). The [Bastion hub](https://github.com/Myrpisset/bastion) ties them together.
+Bastion is an SSH client. This repo holds the version for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen. The other platforms have their own repos: [Bastion for Linux](https://github.com/Pissmyran/bastion-linux), [Bastion for Windows](https://github.com/Pissmyran/bastion-windows), [Bastion for Android](https://github.com/Pissmyran/bastion-android). The [Bastion hub](https://github.com/Pissmyran/bastion) ties them together.
 
 ## Contents
 
@@ -37,13 +37,13 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 ## CodeRabbit reviews
 
 [`.coderabbit.yaml`](.coderabbit.yaml) inherits shared settings from
-`Myrpisset/coderabbit` and adds Apple security, platform and verification guidance.
+`Pissmyran/coderabbit` and adds Apple security, platform and verification guidance.
 Explicit links to the Bastion hub, Linux, Windows and Android repositories support
 cross-platform documentation and sync compatibility reviews. See
 [review configuration verification](docs/operations.md#coderabbit-configuration).
 
 ## More
 
-- [The documentation](https://myrpisset.github.io/bastion-apple/): getting started, architecture, operations, sync format and releases
+- [The documentation](https://docs.denied.se/bastion-apple/): getting started, architecture, operations, sync format and releases
 - [SECURITY.md](SECURITY.md): report a vulnerability
 - [CONTRIBUTING.md](CONTRIBUTING.md): contribute

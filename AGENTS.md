@@ -2,7 +2,7 @@
 
 Bastion for Apple: the SSH client for iOS, iPadOS, macOS and tvOS, built with Swift, SwiftNIO SSH, SwiftUI and XcodeGen.
 
-Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw.githubusercontent.com/Myrpisset/.github/main/GOVERNANCE.md) and [BASTION.md](https://raw.githubusercontent.com/Myrpisset/.github/main/BASTION.md).
+Read the shared rules at the start of every session: [GOVERNANCE.md](https://raw.githubusercontent.com/Pissmyran/.github/main/GOVERNANCE.md) and [BASTION.md](https://raw.githubusercontent.com/Pissmyran/.github/main/BASTION.md).
 
 ## Read first
 
@@ -72,7 +72,7 @@ The apps are built with Xcode on macOS. Targets: `Bastion` (iOS and iPadOS), `Ba
 ## CodeRabbit configuration
 
 Keep `inheritance: true` in `.coderabbit.yaml`; shared settings belong in
-`Myrpisset/coderabbit`. Local instructions cover Apple security boundaries,
+`Pissmyran/coderabbit`. Local instructions cover Apple security boundaries,
 platform availability, verification and shared sync compatibility. Preserve the
 explicit Bastion hub, Linux, Windows and Android links without assuming feature
 parity or repository access. Follow [docs/operations.md](docs/operations.md#coderabbit-configuration)
