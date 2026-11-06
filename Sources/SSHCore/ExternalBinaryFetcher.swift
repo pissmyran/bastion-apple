@@ -1,5 +1,10 @@
 import Crypto
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -34,6 +39,7 @@ public enum ExternalBinaryFetcher {
     /// Checksumman verifieras mot de NEDLADDADE bytesen INNAN något skrivs
     /// till disk — en manipulerad/fel binär hamnar aldrig i cachen ens
     /// tillfälligt.
+    /// `cacheDir` must be trusted and `binaryName` must be a single filename.
     public static func fetch(
         url: URL,
         expectedSHA256: String,
@@ -41,10 +47,20 @@ public enum ExternalBinaryFetcher {
         binaryName: String,
         session: URLSession = .shared
     ) async throws -> URL {
-        let destination = cacheDir.appendingPathComponent(binaryName)
+        guard !binaryName.isEmpty, binaryName != ".", binaryName != "..",
+              !binaryName.contains("/"), !binaryName.contains("\\"), !binaryName.contains("\0") else {
+            throw ExternalBinaryError.cacheWriteFailed("Invalid binary name")
+        }
         let expected = expectedSHA256.lowercased()
+        guard expected.count == 64, expected.allSatisfy({ "0123456789abcdef".contains($0) }) else {
+            throw ExternalBinaryError.cacheWriteFailed("Invalid SHA-256 checksum")
+        }
+        // Content-addressed: each checksum gets its own directory, so concurrent
+        // fetches of different versions under one name never replace each other.
+        let directory = cacheDir.appendingPathComponent(expected)
+        let destination = directory.appendingPathComponent(binaryName)
 
-        if let existing = try? Data(contentsOf: destination), sha256Hex(existing) == expected {
+        if let existing = cachedData(at: destination), sha256Hex(existing) == expected {
             return destination
         }
         // Finns men med fel checksumma (korrupt eller ett gammalt, felaktigt
@@ -71,20 +87,36 @@ public enum ExternalBinaryFetcher {
         }
 
         do {
-            try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             // Skriv till en temporär fil i SAMMA katalog, byt sedan namn —
             // en process som läser `destination` mitt under en nedladdning
             // ska aldrig kunna se en halvskriven fil.
-            let tmp = cacheDir.appendingPathComponent(".\(binaryName).\(UUID().uuidString).tmp")
+            let tmp = directory.appendingPathComponent(".\(binaryName).\(UUID().uuidString).tmp")
+            defer { _ = unlink(tmp.path) }
             try data.write(to: tmp)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tmp.path)
-            _ = try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.moveItem(at: tmp, to: destination)
+            // rename(2) replaces atomically: a concurrent fetch of the same
+            // checksum cannot fail on an existing file or expose a missing one.
+            guard rename(tmp.path, destination.path) == 0 else {
+                throw ExternalBinaryError.cacheWriteFailed(String(cString: strerror(errno)))
+            }
         } catch {
             throw ExternalBinaryError.cacheWriteFailed("\(error)")
         }
 
         return destination
+    }
+
+    private static func cachedData(at url: URL) -> Data? {
+        // Do not treat a symbolic link as a cache hit, even if its target matches.
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard fd >= 0 else { return nil }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else {
+            return nil
+        }
+        return try? handle.readToEnd()
     }
 
     static func sha256Hex(_ data: Data) -> String {
