@@ -20,7 +20,7 @@ Bastion for Apple is an SSH client for iOS, iPadOS, macOS and tvOS. A shared Swi
 
 - `Sources/SSHCore/` is the only code shared by all apps; `App/` is app-only and cannot be built on Linux.
 - `docs/prototype/` is a standalone HTML GUI prototype with its own tests in `Tests/Prototype/`.
-- `Tests/fixtures/` holds the sync-format fixtures; changes to the sync types must follow `docs/sync-format.md`.
+- `Tests/fixtures/` holds the sync-format fixtures; changes to the sync types or sync-format fixtures must follow `docs/sync-format.md`.
 - `.github/release-required-checks` and `.github/release-baseline` control when a release may be cut.
 
 ## Release
