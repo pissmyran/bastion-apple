@@ -1,3 +1,5 @@
+> Guide: [AI- och Copilot-inställningar på GitHub](https://github.com/pissmyran/.github/blob/main/public/ai-och-copilot.md) · [English](https://github.com/pissmyran/.github/blob/main/public/eng/ai-and-copilot.md)
+
 # Bastion for Apple
 
 **Documentation:** [docs.denied.se/bastion-apple](https://docs.denied.se/bastion-apple/)
